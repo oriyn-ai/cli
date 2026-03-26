@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: true
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            use_cross: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            use_cross: false
+          - target: x86_64-pc-windows-gnu
+            os: ubuntu-latest
+            use_cross: true
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross --version 0.2.5
+
+      - name: Build with cross
+        if: matrix.use_cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build natively
+        if: "!matrix.use_cross"
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Determine binary name
+        id: bin
+        shell: bash
+        run: |
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            echo "name=bridge-${{ matrix.target }}.exe" >> "$GITHUB_OUTPUT"
+            echo "path=target/${{ matrix.target }}/release/bridge.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=bridge-${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+            echo "path=target/${{ matrix.target }}/release/bridge" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rename binary
+        shell: bash
+        run: cp "${{ steps.bin.outputs.path }}" "${{ steps.bin.outputs.name }}"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.bin.outputs.name }}
