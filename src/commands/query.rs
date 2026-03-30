@@ -1,15 +1,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-const SERVICE: &str = "bridge-cli";
-const USER: &str = "default";
-
-#[derive(Debug, Error)]
-pub enum QueryError {
-    #[error("failed to read credentials from keychain: {0}")]
-    KeychainRead(#[from] keyring::Error),
-}
+use crate::auth;
 
 #[derive(Serialize)]
 struct QueryRequest<'a> {
@@ -23,11 +15,7 @@ struct QueryResponse {
 
 /// Send a query to the Bridge API and print the response.
 pub async fn run(prompt: &str, api_base: &str) -> Result<()> {
-    let entry = keyring::Entry::new(SERVICE, USER).map_err(QueryError::KeychainRead)?;
-    let token = entry
-        .get_password()
-        .map_err(QueryError::KeychainRead)
-        .context("not logged in — run `bridge login` first")?;
+    let token = auth::get_api_key()?;
 
     let client = reqwest::Client::new();
     let url = format!("{api_base}/v1/query");

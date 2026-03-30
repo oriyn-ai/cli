@@ -32,3 +32,16 @@
 ## Security
 - API tokens stored in OS keychain via `keyring`, never in files or env vars committed to repo
 - Secrets in CI go in GitHub Actions secrets, referenced as `${{ secrets.NAME }}`
+
+## Decision Logging
+
+When choosing between alternatives that affect more than today's task — a library, an architecture pattern, an API design, or deciding NOT to do something — log it in `/decisions/{topic}-YYYY-MM-DD.md`:
+
+## Decision: {what you decided}
+## Context: {why this came up}
+## Alternatives considered: {what else was on the table}
+## Reasoning: {why this option won}
+## Trade-offs accepted: {what you gave up}
+## Status: {active | superseded by {topic}-YYYY-MM-DD | revisit when}
+
+Before making a similar decision, grep `/decisions/` for prior choices and follow them unless new information invalidates the reasoning.
