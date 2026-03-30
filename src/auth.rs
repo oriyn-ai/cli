@@ -29,3 +29,13 @@ pub fn store_api_key(key: &str) -> Result<()> {
         .set_password(key)
         .context("failed to store credentials in OS keychain")
 }
+
+/// Delete the stored API key from the OS keychain.
+pub fn delete_api_key() -> Result<()> {
+    let entry =
+        keyring::Entry::new(SERVICE, USER).context("failed to access OS keychain")?;
+
+    // Ignore "no entry" errors — already logged out
+    let _ = entry.delete_credential();
+    Ok(())
+}
