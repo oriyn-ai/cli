@@ -56,11 +56,11 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            echo "name=bridge-${{ matrix.target }}.exe" >> "$GITHUB_OUTPUT"
-            echo "path=target/${{ matrix.target }}/release/bridge.exe" >> "$GITHUB_OUTPUT"
+            echo "name=oriyn-${{ matrix.target }}.exe" >> "$GITHUB_OUTPUT"
+            echo "path=target/${{ matrix.target }}/release/oriyn.exe" >> "$GITHUB_OUTPUT"
           else
-            echo "name=bridge-${{ matrix.target }}" >> "$GITHUB_OUTPUT"
-            echo "path=target/${{ matrix.target }}/release/bridge" >> "$GITHUB_OUTPUT"
+            echo "name=oriyn-${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+            echo "path=target/${{ matrix.target }}/release/oriyn" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Rename binary

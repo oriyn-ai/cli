@@ -1,12 +1,12 @@
 [package]
-name = "bridge"
+name = "oriyn"
 version = "0.1.0"
 edition = "2021"
-description = "CLI tool for querying customer behavioral intelligence from Bridge"
+description = "CLI tool for querying customer behavioral intelligence from Oriyn"
 license = "MIT"
 
 [[bin]]
-name = "bridge"
+name = "oriyn"
 path = "src/main.rs"
 
 [dependencies]

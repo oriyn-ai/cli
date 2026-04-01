@@ -1,7 +1,7 @@
 ## Repository
-- GitHub org: `try-bridge`
-- CLI repo: `try-bridge/cli`
-- GitHub Releases URL pattern: `https://github.com/try-bridge/cli/releases/download/vX.Y.Z/bridge-<target>`
+- GitHub org: `oriyn-ai`
+- CLI repo: `oriyn-ai/cli`
+- GitHub Releases URL pattern: `https://github.com/oriyn-ai/cli/releases/download/vX.Y.Z/oriyn-<target>`
 
 ## Project Structure
 - Binary crate: `src/main.rs` is the entrypoint only — logic lives in modules

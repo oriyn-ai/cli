@@ -4,16 +4,16 @@ mod commands;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-/// Bridge CLI — query customer behavioral intelligence from the command line
+/// Oriyn CLI — query customer behavioral intelligence from the command line
 #[derive(Parser)]
-#[command(name = "bridge", version, about)]
+#[command(name = "oriyn", version, about)]
 struct Cli {
-    /// Base URL for the Bridge API
-    #[arg(long, default_value = "https://api.trybridge.dev", global = true)]
+    /// Base URL for the Oriyn API
+    #[arg(long, default_value = "https://api.oriyn.ai", global = true)]
     api_base: String,
 
-    /// Base URL for the Bridge web app
-    #[arg(long, default_value = "https://app.trybridge.dev", global = true)]
+    /// Base URL for the Oriyn web app
+    #[arg(long, default_value = "https://app.oriyn.ai", global = true)]
     web_base: String,
 
     #[command(subcommand)]
@@ -22,7 +22,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Authenticate with Bridge via browser login
+    /// Authenticate with Oriyn via browser login
     Login {
         /// Use device code flow (for headless/SSH environments)
         #[arg(long)]

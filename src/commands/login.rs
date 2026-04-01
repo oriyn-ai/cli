@@ -106,7 +106,7 @@ async fn localhost_flow(web_base: &str) -> Result<()> {
             Ok(())
         }
         Ok(Err(_)) => anyhow::bail!("login cancelled"),
-        Err(_) => anyhow::bail!("login timed out after 120 seconds — try `bridge login --device` for headless environments"),
+        Err(_) => anyhow::bail!("login timed out after 120 seconds — try `oriyn login --device` for headless environments"),
     }
 }
 
@@ -178,7 +178,7 @@ async fn device_flow(web_base: &str) -> Result<()> {
         tokio::time::sleep(interval).await;
 
         if tokio::time::Instant::now() > deadline {
-            anyhow::bail!("device code expired — run `bridge login --device` again");
+            anyhow::bail!("device code expired — run `oriyn login --device` again");
         }
 
         let resp = client
@@ -202,7 +202,7 @@ async fn device_flow(web_base: &str) -> Result<()> {
                 return Ok(());
             }
             403 => continue,
-            410 => anyhow::bail!("device code expired — run `bridge login --device` again"),
+            410 => anyhow::bail!("device code expired — run `oriyn login --device` again"),
             status => {
                 let body = resp.text().await.unwrap_or_default();
                 anyhow::bail!("unexpected response ({status}): {body}");

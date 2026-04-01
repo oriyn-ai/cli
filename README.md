@@ -1,25 +1,25 @@
-# Bridge CLI
+# Oriyn CLI
 
-Command-line tool for querying customer behavioral intelligence from Bridge.
+Command-line tool for querying customer behavioral intelligence from Oriyn.
 
 ## Installation
 
 ### Quick install (macOS / Linux)
 
 ```bash
-curl -fsSL https://install.trybridge.dev | bash
+curl -fsSL https://install.oriyn.ai | bash
 ```
 
 ### From GitHub Releases
 
 Download the appropriate binary for your platform from the
-[latest release](https://github.com/try-bridge/cli/releases/latest),
+[latest release](https://github.com/oriyn-ai/cli/releases/latest),
 make it executable, and place it on your `PATH`.
 
 ### From source
 
 ```bash
-cargo install --git https://github.com/try-bridge/cli.git
+cargo install --git https://github.com/oriyn-ai/cli.git
 ```
 
 ## Usage
@@ -27,7 +27,7 @@ cargo install --git https://github.com/try-bridge/cli.git
 ### Authenticate
 
 ```bash
-bridge login
+oriyn login
 ```
 
 This starts an OAuth flow and securely stores your token in the OS keychain.
@@ -35,16 +35,16 @@ This starts an OAuth flow and securely stores your token in the OS keychain.
 ### Query
 
 ```bash
-bridge query "Which customers churned last month?"
+oriyn query "Which customers churned last month?"
 ```
 
-Send a natural-language prompt to the Bridge API and print the response.
+Send a natural-language prompt to the Oriyn API and print the response.
 
 ### Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--api-base <URL>` | Override the Bridge API base URL | `https://api.bridge.com` |
+| `--api-base <URL>` | Override the Oriyn API base URL | `https://api.oriyn.ai` |
 
 ## Development
 

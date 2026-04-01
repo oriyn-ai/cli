@@ -13,7 +13,7 @@ struct QueryResponse {
     answer: String,
 }
 
-/// Send a query to the Bridge API and print the response.
+/// Send a query to the Oriyn API and print the response.
 pub async fn run(prompt: &str, api_base: &str) -> Result<()> {
     let token = auth::get_api_key()?;
 
@@ -26,7 +26,7 @@ pub async fn run(prompt: &str, api_base: &str) -> Result<()> {
         .json(&QueryRequest { prompt })
         .send()
         .await
-        .context("failed to reach the Bridge API")?;
+        .context("failed to reach the Oriyn API")?;
 
     let status = response.status();
     if !status.is_success() {

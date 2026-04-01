@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="try-bridge/cli"
+REPO="oriyn-ai/cli"
 INSTALL_DIR="/usr/local/bin"
 
 detect_target() {
@@ -28,23 +28,23 @@ main() {
     local target url tmp
 
     target="$(detect_target)"
-    url="https://github.com/${REPO}/releases/latest/download/bridge-${target}"
+    url="https://github.com/${REPO}/releases/latest/download/oriyn-${target}"
     tmp="$(mktemp)"
 
     echo "Detected platform: ${target}"
-    echo "Downloading bridge from ${url}..."
+    echo "Downloading oriyn from ${url}..."
 
     curl -fSL --progress-bar -o "$tmp" "$url"
     chmod +x "$tmp"
 
-    echo "Installing to ${INSTALL_DIR}/bridge (may require sudo)..."
+    echo "Installing to ${INSTALL_DIR}/oriyn (may require sudo)..."
     if [ -w "$INSTALL_DIR" ]; then
-        mv "$tmp" "${INSTALL_DIR}/bridge"
+        mv "$tmp" "${INSTALL_DIR}/oriyn"
     else
-        sudo mv "$tmp" "${INSTALL_DIR}/bridge"
+        sudo mv "$tmp" "${INSTALL_DIR}/oriyn"
     fi
 
-    echo "bridge installed successfully! Run 'bridge --help' to get started."
+    echo "oriyn installed successfully! Run 'oriyn --help' to get started."
 }
 
 main

@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
 use std::env;
 
-const SERVICE: &str = "bridge-cli";
+const SERVICE: &str = "oriyn-cli";
 const USER: &str = "default";
 
-/// Resolve the API key: BRIDGE_API_KEY env var first, then OS keychain.
+/// Resolve the API key: ORIYN_API_KEY env var first, then OS keychain.
 pub fn get_api_key() -> Result<String> {
-    if let Ok(key) = env::var("BRIDGE_API_KEY") {
+    if let Ok(key) = env::var("ORIYN_API_KEY") {
         if !key.is_empty() {
             return Ok(key);
         }
@@ -17,7 +17,7 @@ pub fn get_api_key() -> Result<String> {
 
     entry
         .get_password()
-        .context("not logged in — set BRIDGE_API_KEY or run `bridge login`")
+        .context("not logged in — set ORIYN_API_KEY or run `oriyn login`")
 }
 
 /// Store an API key in the OS keychain.

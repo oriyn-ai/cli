@@ -13,7 +13,7 @@ pub async fn run(api_base: &str) -> Result<()> {
     let key = match auth::get_api_key() {
         Ok(key) => key,
         Err(_) => {
-            println!("Not logged in. Run `bridge login` or set BRIDGE_API_KEY.");
+            println!("Not logged in. Run `oriyn login` or set ORIYN_API_KEY.");
             return Ok(());
         }
     };
@@ -24,7 +24,7 @@ pub async fn run(api_base: &str) -> Result<()> {
         .bearer_auth(&key)
         .send()
         .await
-        .context("failed to reach the Bridge API")?;
+        .context("failed to reach the Oriyn API")?;
 
     if !resp.status().is_success() {
         let status = resp.status();
