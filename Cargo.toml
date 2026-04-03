@@ -21,4 +21,5 @@ serde_json = "1.0.149"
 thiserror = "2.0.18"
 tokio = { version = "1.50.0", features = ["full"] }
 posthog-rs = "0.5"
+sentry = "0.47.0"
 uuid = { version = "1", features = ["v4"] }

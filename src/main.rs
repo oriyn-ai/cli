@@ -96,6 +96,12 @@ enum ExperimentCommands {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let _sentry = sentry::init(("https://7a9c0f680579c791f90ecee37a16375f@o4510953905651712.ingest.us.sentry.io/4511156841283584", sentry::ClientOptions {
+        release: sentry::release_name!(),
+        send_default_pii: true,
+        ..Default::default()
+    }));
+
     let cli = Cli::parse();
     let t = telemetry::Telemetry::new().await;
 
