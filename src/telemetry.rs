@@ -56,6 +56,10 @@ fn config_dir() -> PathBuf {
     PathBuf::from(home).join(".config").join("oriyn")
 }
 
+pub fn get_user_id() -> Option<String> {
+    load_user_id()
+}
+
 fn load_user_id() -> Option<String> {
     fs::read_to_string(config_dir().join("user-id"))
         .ok()

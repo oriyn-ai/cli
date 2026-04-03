@@ -2,6 +2,8 @@ mod auth;
 mod commands;
 mod telemetry;
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
@@ -94,13 +96,77 @@ enum ExperimentCommands {
     },
 }
 
+const SENTRY_DSN: &str = "https://7a9c0f680579c791f90ecee37a16375f@o4510953905651712.ingest.us.sentry.io/4511156841283584";
+
+/// Redact "Bearer <token>" patterns from a string.
+fn redact_tokens(s: &str) -> String {
+    let mut result = s.to_string();
+    while let Some(idx) = result.find("Bearer ") {
+        let start = idx + 7;
+        let end = result[start..]
+            .find(|c: char| c.is_whitespace() || c == '"' || c == '\'')
+            .map(|i| start + i)
+            .unwrap_or(result.len());
+        if start < end {
+            result.replace_range(start..end, "[REDACTED]");
+        } else {
+            break;
+        }
+    }
+    result
+}
+
+/// Scrub sensitive data from a Sentry event before it leaves the process.
+fn scrub_event(
+    mut event: sentry::protocol::Event<'static>,
+) -> sentry::protocol::Event<'static> {
+    for exception in &mut event.exception.values {
+        if let Some(ref mut value) = exception.value {
+            *value = redact_tokens(value);
+        }
+    }
+    for breadcrumb in &mut event.breadcrumbs.values {
+        if let Some(ref mut message) = breadcrumb.message {
+            *message = redact_tokens(message);
+        }
+    }
+    event.extra.retain(|k, _| {
+        let lower = k.to_lowercase();
+        !["token", "key", "password", "secret", "authorization", "credential"]
+            .iter()
+            .any(|s| lower.contains(s))
+    });
+    event
+}
+
+/// True for errors the API cannot see: keychain failures and deserialization failures.
+fn is_infra_error(e: &anyhow::Error) -> bool {
+    let msg = format!("{:#}", e);
+    msg.contains("failed to access OS keychain")
+        || msg.contains("failed to store credentials")
+        || msg.contains("failed to parse")
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let _sentry = sentry::init(("https://7a9c0f680579c791f90ecee37a16375f@o4510953905651712.ingest.us.sentry.io/4511156841283584", sentry::ClientOptions {
+    let _sentry = sentry::init((SENTRY_DSN, sentry::ClientOptions {
         release: sentry::release_name!(),
-        send_default_pii: true,
+        send_default_pii: false,
+        environment: Some(
+            if cfg!(debug_assertions) { "development" } else { "production" }.into(),
+        ),
+        before_send: Some(Arc::new(|event| Some(scrub_event(event)))),
         ..Default::default()
     }));
+
+    if let Some(user_id) = telemetry::get_user_id() {
+        sentry::configure_scope(|scope| {
+            scope.set_user(Some(sentry::User {
+                id: Some(user_id),
+                ..Default::default()
+            }));
+        });
+    }
 
     let cli = Cli::parse();
     let t = telemetry::Telemetry::new().await;
@@ -188,6 +254,14 @@ async fn main() -> Result<()> {
             serde_json::json!({ "command": cmd_name, "error_type": format!("{:#}", e) }),
         )
         .await;
+
+        if is_infra_error(e) {
+            sentry::capture_error(e.as_ref() as &dyn std::error::Error);
+        }
+    }
+
+    if result.is_err() {
+        drop(_sentry);
     }
 
     result
