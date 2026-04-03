@@ -1,5 +1,6 @@
 mod auth;
 mod commands;
+mod telemetry;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -41,6 +42,18 @@ enum Commands {
     Experiment {
         #[command(subcommand)]
         command: ExperimentCommands,
+    },
+    /// Manage anonymous usage telemetry
+    Telemetry {
+        /// Disable telemetry
+        #[arg(long)]
+        disable: bool,
+        /// Enable telemetry
+        #[arg(long)]
+        enable: bool,
+        /// Show current telemetry status
+        #[arg(long)]
+        status: bool,
     },
 }
 
@@ -84,28 +97,92 @@ enum ExperimentCommands {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    let t = telemetry::Telemetry::new().await;
 
-    match cli.command {
-        Commands::Login { device } => commands::login::run(&cli.web_base, device).await,
-        Commands::Logout => commands::logout::run(),
-        Commands::Whoami => commands::whoami::run(&cli.api_base).await,
-        Commands::Query { prompt } => commands::query::run(&prompt, &cli.api_base).await,
+    let (cmd_name, result) = match cli.command {
+        Commands::Login { device } => {
+            let method = if device { "device" } else { "browser" };
+            let res = commands::login::run(&cli.web_base, &cli.api_base, device).await;
+            t.capture(
+                "cli_login",
+                serde_json::json!({ "method": method, "success": res.is_ok() }),
+            )
+            .await;
+            ("login", res)
+        }
+        Commands::Logout => {
+            let res = commands::logout::run();
+            telemetry::clear_user_id();
+            t.capture("cli_logout", serde_json::json!({})).await;
+            ("logout", res)
+        }
+        Commands::Whoami => ("whoami", commands::whoami::run(&cli.api_base).await),
+        Commands::Query { prompt } => {
+            let prompt_len = prompt.len();
+            let res = commands::query::run(&prompt, &cli.api_base).await;
+            t.capture(
+                "cli_query",
+                serde_json::json!({ "prompt_length": prompt_len }),
+            )
+            .await;
+            ("query", res)
+        }
         Commands::Experiment { command } => match command {
             ExperimentCommands::Run {
                 product,
                 hypothesis,
                 json,
-            } => commands::experiment::run(&product, &hypothesis, &cli.api_base, json).await,
+            } => {
+                let res =
+                    commands::experiment::run(&product, &hypothesis, &cli.api_base, json).await;
+                t.capture(
+                    "cli_experiment_created",
+                    serde_json::json!({ "product_id": product }),
+                )
+                .await;
+                ("experiment run", res)
+            }
             ExperimentCommands::List { product, json } => {
-                commands::experiment::list(&product, &cli.api_base, json).await
+                let res = commands::experiment::list(&product, &cli.api_base, json).await;
+                t.capture(
+                    "cli_experiment_listed",
+                    serde_json::json!({ "product_id": product }),
+                )
+                .await;
+                ("experiment list", res)
             }
             ExperimentCommands::Get {
                 product,
                 experiment,
                 json,
             } => {
-                commands::experiment::get(&product, &experiment, &cli.api_base, json).await
+                let res =
+                    commands::experiment::get(&product, &experiment, &cli.api_base, json).await;
+                t.capture(
+                    "cli_experiment_viewed",
+                    serde_json::json!({ "product_id": product, "experiment_id": experiment }),
+                )
+                .await;
+                ("experiment get", res)
             }
         },
+        Commands::Telemetry {
+            disable,
+            enable,
+            status,
+        } => {
+            telemetry::manage(disable, enable, status);
+            return Ok(());
+        }
+    };
+
+    if let Err(ref e) = result {
+        t.capture(
+            "cli_error",
+            serde_json::json!({ "command": cmd_name, "error_type": format!("{:#}", e) }),
+        )
+        .await;
     }
+
+    result
 }

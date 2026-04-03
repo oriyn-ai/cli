@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{oneshot, Mutex};
 
 use crate::auth;
+use crate::telemetry;
 
 // --- Localhost callback types ---
 
@@ -53,16 +54,35 @@ struct DeviceTokenResponse {
 }
 
 /// Run the login flow.
-pub async fn run(web_base: &str, device: bool) -> Result<()> {
+pub async fn run(web_base: &str, api_base: &str, device: bool) -> Result<()> {
     if device {
-        device_flow(web_base).await
+        device_flow(web_base, api_base).await
     } else {
-        localhost_flow(web_base).await
+        localhost_flow(web_base, api_base).await
+    }
+}
+
+/// Fetch and store user_id for telemetry after successful login.
+async fn store_user_id_for_telemetry(api_base: &str, api_key: &str) {
+    #[derive(serde::Deserialize)]
+    struct MeResponse {
+        user_id: String,
+    }
+    let Ok(resp) = reqwest::Client::new()
+        .get(format!("{api_base}/v1/me"))
+        .bearer_auth(api_key)
+        .send()
+        .await
+    else {
+        return;
+    };
+    if let Ok(me) = resp.json::<MeResponse>().await {
+        telemetry::store_user_id(&me.user_id);
     }
 }
 
 /// Localhost callback flow: start local server, open browser, wait for redirect back.
-async fn localhost_flow(web_base: &str) -> Result<()> {
+async fn localhost_flow(web_base: &str, api_base: &str) -> Result<()> {
     let (tx, rx) = oneshot::channel::<CallbackResult>();
 
     let state_param = uuid::Uuid::new_v4().to_string();
@@ -102,6 +122,7 @@ async fn localhost_flow(web_base: &str) -> Result<()> {
     match result {
         Ok(Ok(callback)) => {
             auth::store_api_key(&callback.key)?;
+            store_user_id_for_telemetry(api_base, &callback.key).await;
             println!("Logged in as {}", callback.email);
             Ok(())
         }
@@ -139,7 +160,7 @@ async fn callback_handler(
 }
 
 /// Device code flow: generate code, user enters it on any browser, CLI polls for approval.
-async fn device_flow(web_base: &str) -> Result<()> {
+async fn device_flow(web_base: &str, api_base: &str) -> Result<()> {
     let client = reqwest::Client::new();
 
     // Step 1: Request device code
@@ -198,6 +219,7 @@ async fn device_flow(web_base: &str) -> Result<()> {
                     .context("failed to parse token response")?;
 
                 auth::store_api_key(&token.key)?;
+                store_user_id_for_telemetry(api_base, &token.key).await;
                 println!("Logged in as {}", token.email);
                 return Ok(());
             }
