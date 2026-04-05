@@ -36,6 +36,53 @@ enum Commands {
         /// The natural-language prompt to send
         prompt: String,
     },
+    /// List products or get product details
+    Products {
+        #[command(subcommand)]
+        command: Option<ProductSubcommands>,
+        /// Output raw JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// View behavioral personas for a product
+    Personas {
+        /// The product ID
+        #[arg(long)]
+        product_id: String,
+        /// Output raw JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// View behavioral patterns for a product
+    Patterns {
+        /// The product ID
+        #[arg(long)]
+        product_id: String,
+        /// Output raw JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// View prescriptive product direction
+    Direction {
+        /// The product ID
+        #[arg(long)]
+        product_id: String,
+        /// Output raw JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Trigger context synthesis for a product
+    Synthesize {
+        /// The product ID
+        #[arg(long)]
+        product_id: String,
+    },
+    /// Trigger behavioral enrichment for a product
+    Enrich {
+        /// The product ID
+        #[arg(long)]
+        product_id: String,
+    },
     /// Run hypothesis experiments against product personas
     Experiment {
         #[command(subcommand)]
@@ -52,6 +99,31 @@ enum Commands {
         /// Show current telemetry status
         #[arg(long)]
         status: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProductSubcommands {
+    /// List all products
+    List {
+        /// Output raw JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// List all products (alias for list)
+    Ls {
+        /// Output raw JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Get details for a specific product
+    Get {
+        /// The product ID
+        #[arg(long)]
+        product_id: String,
+        /// Output raw JSON
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -193,6 +265,77 @@ async fn main() -> Result<()> {
             )
             .await;
             ("query", res)
+        }
+        Commands::Products { command, json } => match command {
+            Some(ProductSubcommands::Get { product_id, json }) => {
+                let res =
+                    commands::products::get(&product_id, &cli.api_base, json).await;
+                t.capture(
+                    "cli_product_viewed",
+                    serde_json::json!({ "product_id": product_id }),
+                )
+                .await;
+                ("products get", res)
+            }
+            Some(ProductSubcommands::List { json }) | Some(ProductSubcommands::Ls { json }) => {
+                let res = commands::products::list(&cli.api_base, json).await;
+                t.capture("cli_products_listed", serde_json::json!({})).await;
+                ("products list", res)
+            }
+            None => {
+                let res = commands::products::list(&cli.api_base, json).await;
+                t.capture("cli_products_listed", serde_json::json!({})).await;
+                ("products list", res)
+            }
+        },
+        Commands::Personas { product_id, json } => {
+            let res =
+                commands::personas::run(&product_id, &cli.api_base, json).await;
+            t.capture(
+                "cli_personas_viewed",
+                serde_json::json!({ "product_id": product_id }),
+            )
+            .await;
+            ("personas", res)
+        }
+        Commands::Patterns { product_id, json } => {
+            let res =
+                commands::patterns::run(&product_id, &cli.api_base, json).await;
+            t.capture(
+                "cli_patterns_viewed",
+                serde_json::json!({ "product_id": product_id }),
+            )
+            .await;
+            ("patterns", res)
+        }
+        Commands::Direction { product_id, json } => {
+            let res =
+                commands::direction::run(&product_id, &cli.api_base, json).await;
+            t.capture(
+                "cli_direction_viewed",
+                serde_json::json!({ "product_id": product_id }),
+            )
+            .await;
+            ("direction", res)
+        }
+        Commands::Synthesize { product_id } => {
+            let res =
+                commands::synthesize::run(&product_id, &cli.api_base).await;
+            t.capture(
+                "cli_product_synthesized",
+                serde_json::json!({ "product_id": product_id }),
+            )
+            .await;
+            ("synthesize", res)
+        }
+        Commands::Enrich { product_id } => {
+            let res = commands::enrich::run(&product_id, &cli.api_base).await;
+            t.capture(
+                "cli_product_enriched",
+                serde_json::json!({ "product_id": product_id }),
+            )
+            .await;
+            ("enrich", res)
         }
         Commands::Experiment { command } => match command {
             ExperimentCommands::Run {
