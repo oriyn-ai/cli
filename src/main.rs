@@ -26,11 +26,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Authenticate with Oriyn via browser login
-    Login {
-        /// Use device code flow (for headless/SSH environments)
-        #[arg(long)]
-        device: bool,
-    },
+    Login,
     /// Remove stored credentials
     Logout,
     /// Show the currently authenticated user
@@ -143,8 +139,8 @@ fn scrub_event(
 fn is_infra_error(e: &anyhow::Error) -> bool {
     let msg = format!("{:#}", e);
     msg.contains("failed to access OS keychain")
-        || msg.contains("failed to store credentials")
-        || msg.contains("failed to parse")
+        || msg.contains("failed to store credentials in OS keychain")
+        || msg.contains("failed to parse stored credentials")
 }
 
 #[tokio::main]
@@ -172,12 +168,11 @@ async fn main() -> Result<()> {
     let t = telemetry::Telemetry::new().await;
 
     let (cmd_name, result) = match cli.command {
-        Commands::Login { device } => {
-            let method = if device { "device" } else { "browser" };
-            let res = commands::login::run(&cli.web_base, &cli.api_base, device).await;
+        Commands::Login => {
+            let res = commands::login::run(&cli.web_base, &cli.api_base).await;
             t.capture(
                 "cli_login",
-                serde_json::json!({ "method": method, "success": res.is_ok() }),
+                serde_json::json!({ "success": res.is_ok() }),
             )
             .await;
             ("login", res)

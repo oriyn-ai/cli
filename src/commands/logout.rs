@@ -4,7 +4,7 @@ use crate::auth;
 
 /// Remove stored credentials from the OS keychain.
 pub fn run() -> Result<()> {
-    auth::delete_api_key()?;
+    auth::delete_credentials()?;
     println!("Logged out.");
     Ok(())
 }

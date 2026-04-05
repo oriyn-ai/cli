@@ -6,14 +6,15 @@ use crate::auth;
 #[derive(Deserialize)]
 struct MeResponse {
     user_id: String,
+    email: String,
 }
 
 /// Show the currently authenticated user.
 pub async fn run(api_base: &str) -> Result<()> {
-    let key = match auth::get_api_key() {
-        Ok(key) => key,
+    let token = match auth::get_valid_access_token().await {
+        Ok(token) => token,
         Err(_) => {
-            println!("Not logged in. Run `oriyn login` or set ORIYN_API_KEY.");
+            println!("Not logged in. Run `oriyn login` to authenticate.");
             return Ok(());
         }
     };
@@ -21,7 +22,7 @@ pub async fn run(api_base: &str) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client
         .get(format!("{api_base}/v1/me"))
-        .bearer_auth(&key)
+        .bearer_auth(&token)
         .send()
         .await
         .context("failed to reach the Oriyn API")?;
@@ -37,6 +38,6 @@ pub async fn run(api_base: &str) -> Result<()> {
         .await
         .context("failed to parse response")?;
 
-    println!("Logged in as user {}", me.user_id);
+    println!("Logged in as {} ({})", me.email, me.user_id);
     Ok(())
 }

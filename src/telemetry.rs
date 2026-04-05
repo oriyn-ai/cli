@@ -27,7 +27,7 @@ impl Telemetry {
             .expect("valid posthog options");
 
         let client = posthog_rs::client(options).await;
-        let distinct_id = load_user_id().or_else(|| load_or_create_anonymous_id());
+        let distinct_id = load_user_id().or_else(load_or_create_anonymous_id);
 
         Self { client, distinct_id }
     }

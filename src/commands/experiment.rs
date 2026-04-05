@@ -49,7 +49,7 @@ struct ExperimentListItem {
 
 /// List experiments for a product.
 pub async fn list(product_id: &str, api_base: &str, json: bool) -> Result<()> {
-    let token = auth::get_api_key()?;
+    let token = auth::get_valid_access_token().await?;
     let client = reqwest::Client::new();
     let url = format!("{api_base}/products/{product_id}/experiments");
 
@@ -88,8 +88,8 @@ pub async fn list(product_id: &str, api_base: &str, json: bool) -> Result<()> {
     }
 
     println!(
-        "{:<38} {:<12} {:<10} {:<30} {}",
-        "ID", "STATUS", "VERDICT", "RUN BY", "HYPOTHESIS"
+        "{:<38} {:<12} {:<10} {:<30} HYPOTHESIS",
+        "ID", "STATUS", "VERDICT", "RUN BY"
     );
     for item in &items {
         let verdict = item.verdict.as_deref().unwrap_or("-");
@@ -104,7 +104,7 @@ pub async fn list(product_id: &str, api_base: &str, json: bool) -> Result<()> {
 
 /// Get a specific experiment's results.
 pub async fn get(product_id: &str, experiment_id: &str, api_base: &str, json: bool) -> Result<()> {
-    let token = auth::get_api_key()?;
+    let token = auth::get_valid_access_token().await?;
     let client = reqwest::Client::new();
     let url = format!("{api_base}/products/{product_id}/experiments/{experiment_id}");
 
@@ -146,7 +146,7 @@ pub async fn get(product_id: &str, experiment_id: &str, api_base: &str, json: bo
 
 /// Run a hypothesis experiment against product personas.
 pub async fn run(product_id: &str, hypothesis: &str, api_base: &str, json: bool) -> Result<()> {
-    let token = auth::get_api_key()?;
+    let token = auth::get_valid_access_token().await?;
     let client = reqwest::Client::new();
 
     // Create experiment

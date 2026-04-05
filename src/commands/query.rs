@@ -15,7 +15,7 @@ struct QueryResponse {
 
 /// Send a query to the Oriyn API and print the response.
 pub async fn run(prompt: &str, api_base: &str) -> Result<()> {
-    let token = auth::get_api_key()?;
+    let token = auth::get_valid_access_token().await?;
 
     let client = reqwest::Client::new();
     let url = format!("{api_base}/v1/query");
