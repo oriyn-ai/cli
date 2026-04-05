@@ -13,7 +13,7 @@ path = "src/main.rs"
 anyhow = "1.0.102"
 axum = "0.8.8"
 clap = { version = "4.6.0", features = ["derive"] }
-keyring = { version = "3.6.3", features = ["apple-native"] }
+keyring = "3.6.3"
 open = "5"
 reqwest = { version = "0.13.2", features = ["json"] }
 serde = { version = "1.0.228", features = ["derive"] }
@@ -23,3 +23,12 @@ tokio = { version = "1.50.0", features = ["full"] }
 posthog-rs = "0.5"
 sentry = "0.47.0"
 uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", features = ["linux-native"] }
