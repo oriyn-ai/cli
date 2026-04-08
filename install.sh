@@ -10,8 +10,8 @@ detect_target() {
     arch="$(uname -m)"
 
     case "$os" in
-        Linux)  os="unknown-linux-gnu" ;;
-        Darwin) os="apple-darwin" ;;
+        Linux)  os="linux" ;;
+        Darwin) os="darwin" ;;
         *)
             echo "Unsupported OS. Download manually: https://github.com/oriyn-ai/cli/releases/latest" >&2
             exit 1
@@ -19,12 +19,12 @@ detect_target() {
     esac
 
     case "$arch" in
-        x86_64|amd64)  arch="x86_64" ;;
-        aarch64|arm64) arch="aarch64" ;;
+        x86_64|amd64)  arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
         *)             echo "Unsupported architecture: $arch" >&2; exit 1 ;;
     esac
 
-    echo "${arch}-${os}"
+    echo "${os}-${arch}"
 }
 
 checksum_cmd() {

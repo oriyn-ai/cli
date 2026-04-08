@@ -1,0 +1,163 @@
+package cmd
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/getsentry/sentry-go"
+	"github.com/spf13/cobra"
+
+	"github.com/oriyn-ai/cli/internal/apiclient"
+	"github.com/oriyn-ai/cli/internal/auth"
+	"github.com/oriyn-ai/cli/internal/telemetry"
+)
+
+const sentryDSN = "https://7a9c0f680579c791f90ecee37a16375f@o4510953905651712.ingest.us.sentry.io/4511156841283584"
+
+// App holds shared dependencies available to all commands.
+type App struct {
+	AuthStore *auth.Store
+	API       *apiclient.Client
+	Tracker   *telemetry.Tracker
+	APIBase   string
+	WebBase   string
+}
+
+func Execute(version, commit string) error {
+	app := &App{}
+
+	rootCmd := &cobra.Command{
+		Use:     "oriyn",
+		Short:   "Oriyn CLI — query customer behavioral intelligence from the command line",
+		Version: version,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			env := "production"
+			if version == "dev" {
+				env = "development"
+			}
+			if err := sentry.Init(sentry.ClientOptions{
+				Dsn:            sentryDSN,
+				Release:        version,
+				Environment:    env,
+				SendDefaultPII: false,
+				BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
+					return scrubEvent(event)
+				},
+			}); err != nil {
+				// Sentry init failure is non-fatal
+				_ = err
+			}
+
+			if uid := telemetry.GetUserID(); uid != "" {
+				sentry.ConfigureScope(func(scope *sentry.Scope) {
+					scope.SetUser(sentry.User{ID: uid})
+				})
+			}
+
+			app.AuthStore = auth.NewStore()
+			app.APIBase, _ = cmd.Flags().GetString("api-base")
+			app.WebBase, _ = cmd.Flags().GetString("web-base")
+			app.API = apiclient.New(app.APIBase, app.AuthStore)
+			app.Tracker = telemetry.NewTracker(version)
+
+			return nil
+		},
+		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+			if app.Tracker != nil {
+				app.Tracker.Close()
+			}
+			sentry.Flush(2 * time.Second)
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	rootCmd.PersistentFlags().String("api-base", "https://api.oriyn.ai", "Base URL for the Oriyn API")
+	rootCmd.PersistentFlags().String("web-base", "https://app.oriyn.ai", "Base URL for the Oriyn web app")
+
+	rootCmd.AddCommand(
+		newLoginCmd(app),
+		newLogoutCmd(app),
+		newWhoamiCmd(app),
+		newProductsCmd(app),
+		newPersonasCmd(app),
+		newPatternsCmd(app),
+		newDirectionCmd(app),
+		newSynthesizeCmd(app),
+		newEnrichCmd(app),
+		newExperimentCmd(app),
+		newTelemetryCmd(version),
+	)
+
+	if err := rootCmd.Execute(); err != nil {
+		cmdName := ""
+		if rootCmd.CalledAs() != "" {
+			cmdName = rootCmd.CalledAs()
+		}
+		if app.Tracker != nil {
+			app.Tracker.Capture("cli_error", map[string]interface{}{
+				"command":    cmdName,
+				"error_type": err.Error(),
+			})
+		}
+		if isInfraError(err) {
+			sentry.CaptureException(err)
+			sentry.Flush(2 * time.Second)
+		}
+		return fmt.Errorf("Error: %w", err)
+	}
+	return nil
+}
+
+func redactTokens(s string) string {
+	result := s
+	for {
+		idx := strings.Index(result, "Bearer ")
+		if idx == -1 {
+			break
+		}
+		start := idx + 7
+		end := len(result)
+		for i := start; i < len(result); i++ {
+			c := result[i]
+			if c == ' ' || c == '\t' || c == '\n' || c == '"' || c == '\'' {
+				end = i
+				break
+			}
+		}
+		if start >= end {
+			break
+		}
+		result = result[:start] + "[REDACTED]" + result[end:]
+	}
+	return result
+}
+
+func scrubEvent(event *sentry.Event) *sentry.Event {
+	for i := range event.Exception {
+		event.Exception[i].Value = redactTokens(event.Exception[i].Value)
+	}
+	for i := range event.Breadcrumbs {
+		event.Breadcrumbs[i].Message = redactTokens(event.Breadcrumbs[i].Message)
+	}
+	sensitive := []string{"token", "key", "password", "secret", "authorization", "credential"}
+	for k := range event.Extra {
+		lower := strings.ToLower(k)
+		for _, s := range sensitive {
+			if strings.Contains(lower, s) {
+				delete(event.Extra, k)
+				break
+			}
+		}
+	}
+	return event
+}
+
+func isInfraError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "failed to access OS keychain") ||
+		strings.Contains(msg, "failed to store credentials in OS keychain") ||
+		strings.Contains(msg, "failed to parse stored credentials")
+}

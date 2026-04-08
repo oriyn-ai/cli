@@ -9,110 +9,20 @@ permissions:
   contents: write
 
 jobs:
-  validate:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          fetch-depth: 0
 
-      - name: Run tests
-        run: cargo test --workspace
-
-      - name: Run clippy
-        run: cargo clippy -- -D warnings
-
-      - name: Verify version matches tag
-        run: |
-          cargo_version="$(grep '^version' Cargo.toml | head -1 | sed 's/.*= *"//' | sed 's/"//')"
-          tag_version="${GITHUB_REF_NAME#v}"
-          if [ "$cargo_version" != "$tag_version" ]; then
-            echo "Version mismatch: Cargo.toml has ${cargo_version}, tag is ${tag_version}" >&2
-            exit 1
-          fi
-          echo "Version verified: ${cargo_version}"
-
-  build:
-    needs: validate
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            use_cross: true
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            use_cross: true
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            use_cross: false
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            use_cross: false
-          - target: x86_64-pc-windows-gnu
-            os: ubuntu-latest
-            use_cross: true
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v5
         with:
-          targets: ${{ matrix.target }}
+          go-version: "1.23"
 
-      - name: Install cross
-        if: matrix.use_cross
-        run: cargo install cross --version 0.2.5
-
-      - name: Build with cross
-        if: matrix.use_cross
-        run: cross build --release --target ${{ matrix.target }}
-
-      - name: Build natively
-        if: "!matrix.use_cross"
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Determine binary name
-        id: bin
-        shell: bash
-        run: |
-          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            echo "name=oriyn-${{ matrix.target }}.exe" >> "$GITHUB_OUTPUT"
-            echo "path=target/${{ matrix.target }}/release/oriyn.exe" >> "$GITHUB_OUTPUT"
-          else
-            echo "name=oriyn-${{ matrix.target }}" >> "$GITHUB_OUTPUT"
-            echo "path=target/${{ matrix.target }}/release/oriyn" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Rename binary
-        shell: bash
-        run: cp "${{ steps.bin.outputs.path }}" "${{ steps.bin.outputs.name }}"
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+      - uses: goreleaser/goreleaser-action@v6
         with:
-          files: ${{ steps.bin.outputs.name }}
-          generate_release_notes: true
-
-  checksums:
-    needs: build
-    runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download release artifacts
-        run: gh release download ${{ github.ref_name }}
-
-      - name: Generate checksums
-        run: sha256sum oriyn-* > checksums.txt
-
-      - name: Upload checksums
-        run: gh release upload ${{ github.ref_name }} checksums.txt
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

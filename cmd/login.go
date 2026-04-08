@@ -1,0 +1,161 @@
+package cmd
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/pkg/browser"
+	"github.com/spf13/cobra"
+
+	"github.com/oriyn-ai/cli/internal/auth"
+	"github.com/oriyn-ai/cli/internal/telemetry"
+)
+
+type callbackResult struct {
+	accessToken  string
+	refreshToken string
+	expiresIn    int64
+}
+
+func newLoginCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "login",
+		Short: "Authenticate with Oriyn via browser login",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := runLogin(cmd.Context(), app.WebBase, app.APIBase, app.AuthStore)
+			app.Tracker.Capture("cli_login", map[string]interface{}{"success": err == nil})
+			return err
+		},
+	}
+}
+
+func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Store) error {
+	stateParam := uuid.NewString()
+	callbackCh := make(chan callbackResult, 1)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /callback", makeCallbackHandler(stateParam, callbackCh))
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return fmt.Errorf("binding local server: %w", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	server := &http.Server{Handler: mux}
+	go func() { _ = server.Serve(listener) }()
+	defer func() { _ = server.Shutdown(context.Background()) }()
+
+	loginURL := fmt.Sprintf("%s/auth/cli/login?port=%d&state=%s", webBase, port, stateParam)
+	if err := browser.OpenURL(loginURL); err != nil {
+		fmt.Printf("Open this URL in your browser:\n\n  %s\n\n", loginURL)
+	} else {
+		fmt.Println("Opening browser to log in...")
+	}
+	fmt.Println("Waiting for authentication...")
+
+	select {
+	case cb := <-callbackCh:
+		creds := &auth.Credentials{
+			AccessToken:  cb.accessToken,
+			RefreshToken: cb.refreshToken,
+			ExpiresAt:    time.Now().Unix() + cb.expiresIn,
+		}
+		if err := authStore.Save(creds); err != nil {
+			return err
+		}
+
+		// Single /v1/me call for both email and user ID (consolidated from Rust's two calls)
+		me, err := fetchMe(ctx, apiBase, creds.AccessToken)
+		if err == nil {
+			if me.userID != "" {
+				telemetry.StoreUserID(me.userID)
+			}
+			if me.email != "" {
+				fmt.Printf("Logged in as %s\n", me.email)
+			} else {
+				fmt.Println("Logged in successfully.")
+			}
+		} else {
+			fmt.Println("Logged in successfully.")
+		}
+
+		return nil
+	case <-time.After(120 * time.Second):
+		return fmt.Errorf("login timed out after 120 seconds — please try again")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+type meInfo struct {
+	userID string
+	email  string
+}
+
+func fetchMe(ctx context.Context, apiBase, token string) (*meInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBase+"/v1/me", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("API returned %d", resp.StatusCode)
+	}
+
+	var data struct {
+		UserID string `json:"user_id"`
+		Email  string `json:"email"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, err
+	}
+	return &meInfo{userID: data.UserID, email: data.Email}, nil
+}
+
+// decodeJSON is a helper for reading JSON response bodies.
+func decodeJSON(r io.Reader, v interface{}) error {
+	return json.NewDecoder(r).Decode(v)
+}
+
+func makeCallbackHandler(expectedState string, ch chan<- callbackResult) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+
+		if q.Get("state") != expectedState {
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, "<html><body><h1>Error</h1><p>State mismatch — possible CSRF. Please try again.</p></body></html>")
+			return
+		}
+
+		expiresIn := int64(0)
+		if v := q.Get("expires_in"); v != "" {
+			fmt.Sscanf(v, "%d", &expiresIn)
+		}
+
+		ch <- callbackResult{
+			accessToken:  q.Get("access_token"),
+			refreshToken: q.Get("refresh_token"),
+			expiresIn:    expiresIn,
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<html><body style="font-family:system-ui;text-align:center;padding:4rem">`+
+			`<h1>Authentication successful</h1>`+
+			`<p>You may close this page and return to your terminal.</p>`+
+			`</body></html>`)
+	}
+}

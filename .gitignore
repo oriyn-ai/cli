@@ -1,4 +1,8 @@
-/target
+# Go binary
+/oriyn
+dist/
+
+# Editor
 *.swp
 *.swo
 *~

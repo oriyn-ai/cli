@@ -23,13 +23,13 @@ You do not over-engineer. You do not gold-plate. You make the smallest change th
 
 ## This repo
 
-`oriyn-cli` is a Rust CLI tool. It is a thin client over `oriyn-api` — it handles setup and auth only. No business logic lives here. Every meaningful operation is a call to the API.
+`oriyn-cli` is a Go CLI tool. It is a thin client over `oriyn-api` — it handles setup and auth only. No business logic lives here. Every meaningful operation is a call to the API.
 
 ### The broader system
 
 Oriyn has two other repos:
 
-- **`oriyn-api`** — a Python/FastAPI HTTP API on Railway (rewritten from Rust/Axum in April 2026 — see `../decisions/rust-to-python-2026-04-07.md`). This CLI calls it directly. All endpoints, auth tokens, and response shapes are preserved.
+- **`oriyn-api`** — a Python/FastAPI HTTP API on Railway. This CLI calls it directly. All endpoints, auth tokens, and response shapes are preserved.
 - **`oriyn-web`** — a Next.js web app on Vercel. It calls the same API. The CLI and web app are two surfaces over the same backend; they do not interact with each other.
 
 Do not add logic here that belongs in the API. If a behavior needs to exist for both the CLI and the web app, it lives in `oriyn-api`.
@@ -38,42 +38,77 @@ Do not add logic here that belongs in the API. If a behavior needs to exist for 
 
 - GitHub org: `oriyn-ai`
 - CLI repo: `oriyn-ai/cli`
-- GitHub Releases URL pattern: `https://github.com/oriyn-ai/cli/releases/download/vX.Y.Z/oriyn-<target>`
+- GitHub Releases URL pattern: `https://github.com/oriyn-ai/cli/releases/download/vX.Y.Z/oriyn-<os>-<arch>`
+
+## Language & Toolchain
+
+- Go 1.23+
+- Module path: `github.com/oriyn-ai/cli`
+- Build: `go build ./...`
+- Test: `go test ./...`
+- Lint: `go vet ./...`
 
 ## Project Structure
 
-- Binary crate: `src/main.rs` is the entrypoint only — logic lives in modules
-- `src/commands/` — one file per subcommand
-- `src/api/` — HTTP client and request/response types
-- `src/auth.rs` — keychain read/write logic
+- `main.go` — entrypoint, version vars, cobra Execute()
+- `cmd/` — one file per cobra command (login, logout, whoami, products, personas, patterns, direction, synthesize, enrich, experiment, telemetry)
+- `cmd/root.go` — root command, global flags, Sentry init, App struct, PersistentPreRunE/PostRunE
+- `internal/auth/` — keychain read/write, token refresh, Keyring interface
+- `internal/apiclient/` — typed HTTP client wrapping resty, request/response structs
+- `internal/telemetry/` — PostHog tracker, config dir helpers, manage command logic
 
 ## Dependencies
 
-- Error handling: `thiserror` for library errors, `anyhow` for binary errors
-- HTTP: `reqwest` with `json` and `rustls-tls` features (avoid openssl dependency)
-- Auth storage: `keyring` — never write credentials to flat files
-- Async: `tokio` with `full` features unless you have a reason to be selective
+| Purpose | Library |
+|---|---|
+| CLI framework | `github.com/spf13/cobra` |
+| Keychain | `github.com/zalando/go-keyring` |
+| HTTP client | `github.com/go-resty/resty/v2` |
+| Terminal tables | `github.com/olekukonenko/tablewriter` |
+| Styled output | `github.com/fatih/color` |
+| Open browser | `github.com/pkg/browser` |
+| UUID | `github.com/google/uuid` |
+| PostHog | `github.com/posthog/posthog-go` |
+| Sentry | `github.com/getsentry/sentry-go` |
 
-## Async
+Do NOT add dependencies beyond these without explicit justification logged in `/decisions/`.
 
-- Mark all I/O functions `async`
-- Never call blocking code inside async context — use `tokio::task::spawn_blocking` if needed
+## Design Principles
+
+- **`context.Context` everywhere.** Every function that does I/O takes a `ctx context.Context` as its first argument.
+- **Interfaces for seams.** The keyring, the HTTP client auth, and PostHog are behind interfaces so commands are testable without real credentials or network calls.
+- **Errors are values.** Use `fmt.Errorf("context: %w", err)` for wrapping. Define sentinel errors with `errors.New` for conditions callers need to check. Use `errors.Is`/`errors.As` for matching.
+- **No `panic()`.** No `unwrap()`-style patterns. Propagate errors with clear context.
+- **Goroutines + channels over callbacks.** The login callback server uses a channel to signal completion.
+- **Structs over scattered parameters.** The `App` struct holds shared dependencies.
+- **Package-level organization by domain.** Types live next to the code that uses them.
 
 ## Error Handling
 
-- No `unwrap()` or `expect()` outside of tests
-- Propagate errors with `?`
-- Surface user-facing errors with context: `anyhow::Context::context()`
+- No `panic()` or bare `log.Fatal()` outside of truly unrecoverable situations
+- Propagate errors with `?` equivalent: `if err != nil { return fmt.Errorf("context: %w", err) }`
+- Surface user-facing errors with context
+- Define sentinel errors for conditions callers check: `auth.ErrNotLoggedIn`, `auth.ErrSessionExpired`
+
+## Testing
+
+- Run: `go test ./...`
+- Use interfaces for mocking: `auth.Keyring`, `apiclient.AuthProvider`
+- Commands write to `cmd.OutOrStdout()` for output capture in tests
+- No test files are required for the initial implementation, but the architecture supports testing
 
 ## Release & Versioning
 
 - Semver: `MAJOR.MINOR.PATCH`
 - Tag format for GitHub Actions release trigger: `v1.2.3`
-- Cross-compilation targets: x86_64/aarch64 for linux and darwin, x86_64 for windows
+- GoReleaser builds for linux/darwin (amd64, arm64) and windows (amd64)
+- Version injected via ldflags: `-X main.version={{.Version}} -X main.commit={{.Commit}}`
 
 ## Security
 
-- API tokens stored in OS keychain via `keyring`, never in files or env vars committed to repo
+- API tokens stored in OS keychain via `go-keyring`, never in files or env vars committed to repo
+- `ORIYN_ACCESS_TOKEN` env var exists only as a CI escape hatch
+- Sentry scrubs Bearer tokens and sensitive extras before sending
 - Secrets in CI go in GitHub Actions secrets, referenced as `${{ secrets.NAME }}`
 
 ## Decision Logging

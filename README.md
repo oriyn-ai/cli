@@ -19,7 +19,7 @@ make it executable, and place it on your `PATH`.
 ### From source
 
 ```bash
-cargo install --git https://github.com/oriyn-ai/cli.git
+go install github.com/oriyn-ai/cli@latest
 ```
 
 ## Usage
@@ -32,25 +32,40 @@ oriyn login
 
 This starts an OAuth flow and securely stores your token in the OS keychain.
 
-### Query
+### Query products
 
 ```bash
-oriyn query "Which customers churned last month?"
+oriyn products                          # list all products
+oriyn products get --product-id <ID>    # get product details
 ```
 
-Send a natural-language prompt to the Oriyn API and print the response.
+### View enrichment data
+
+```bash
+oriyn personas --product-id <ID>        # behavioral personas
+oriyn patterns --product-id <ID>        # behavioral patterns
+oriyn direction --product-id <ID>       # prescriptive direction
+```
+
+### Run experiments
+
+```bash
+oriyn experiment run --product <ID> --hypothesis "Users prefer dark mode"
+oriyn experiment list --product <ID>
+oriyn experiment get --product <ID> --experiment <EID>
+```
 
 ### Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--api-base <URL>` | Override the Oriyn API base URL | `https://api.oriyn.ai` |
+| `--web-base <URL>` | Override the Oriyn web app base URL | `https://app.oriyn.ai` |
 
 ## Development
 
 ```bash
-cargo build          # compile
-cargo test           # run tests
-cargo clippy -- -D warnings  # lint
-cargo fmt            # format
+go build ./...          # compile
+go test ./...           # run tests
+go vet ./...            # lint
 ```
