@@ -29,7 +29,7 @@ You do not over-engineer. You do not gold-plate. You make the smallest change th
 
 Oriyn has two other repos:
 
-- **`oriyn-api`** — a Rust + Axum HTTP API on Railway. This CLI calls it directly. All endpoints, auth tokens, and response shapes are defined there.
+- **`oriyn-api`** — a Python/FastAPI HTTP API on Railway (rewritten from Rust/Axum in April 2026 — see `../decisions/rust-to-python-2026-04-07.md`). This CLI calls it directly. All endpoints, auth tokens, and response shapes are preserved.
 - **`oriyn-web`** — a Next.js web app on Vercel. It calls the same API. The CLI and web app are two surfaces over the same backend; they do not interact with each other.
 
 Do not add logic here that belongs in the API. If a behavior needs to exist for both the CLI and the web app, it lives in `oriyn-api`.
