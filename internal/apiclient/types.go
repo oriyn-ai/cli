@@ -75,15 +75,18 @@ type CreateExperimentResponse struct {
 
 type ExperimentSummary struct {
 	Verdict          string                 `json:"verdict"`
-	Confidence       float32                `json:"confidence"`
+	Convergence      float32                `json:"convergence"`
 	Summary          string                 `json:"summary"`
 	PersonaBreakdown []PersonaBreakdownItem `json:"persona_breakdown"`
+	QuestionResults  json.RawMessage        `json:"question_results"`
+	AgentCount       int                    `json:"agent_count"`
 }
 
 type PersonaBreakdownItem struct {
-	Persona   string `json:"persona"`
-	Response  string `json:"response"`
-	Reasoning string `json:"reasoning"`
+	Persona      string  `json:"persona"`
+	Response     string  `json:"response"`
+	Reasoning    string  `json:"reasoning"`
+	AdoptionRate float32 `json:"adoption_rate"`
 }
 
 type ExperimentResponse struct {

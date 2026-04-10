@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/fatih/color"
@@ -172,17 +171,15 @@ func printResults(w interface{ Write([]byte) (int, error) }, exp *apiclient.Expe
 		return
 	}
 	s := exp.Summary
-	confidencePct := int(math.Round(float64(s.Confidence) * 100))
-
-	fmt.Fprintf(w, "Verdict:    %s\n", colorVerdict(s.Verdict))
-	fmt.Fprintf(w, "Confidence: %d%%\n", confidencePct)
+	fmt.Fprintf(w, "Verdict:     %s\n", colorVerdict(s.Verdict))
+	fmt.Fprintf(w, "Convergence: %.0f%%\n", s.Convergence*100)
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Summary:")
 	fmt.Fprintln(w, s.Summary)
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Persona Breakdown:")
 	for _, item := range s.PersonaBreakdown {
-		fmt.Fprintf(w, "  %s (%s): %s\n", item.Persona, item.Response, item.Reasoning)
+		fmt.Fprintf(w, "  %s (%s, %.0f%% adoption): %s\n", item.Persona, item.Response, item.AdoptionRate*100, item.Reasoning)
 	}
 }
 
