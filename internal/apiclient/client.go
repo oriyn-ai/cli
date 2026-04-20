@@ -2,7 +2,10 @@ package apiclient
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/url"
+	"strconv"
 
 	"github.com/go-resty/resty/v2"
 )
@@ -37,11 +40,20 @@ func checkResp(resp *resty.Response, err error) error {
 	if err != nil {
 		return fmt.Errorf("reaching oriyn API: %w", err)
 	}
-	if resp.IsError() {
-		return fmt.Errorf("API returned %d: %s", resp.StatusCode(), resp.String())
+	if !resp.IsError() {
+		return nil
 	}
-	return nil
+	apiErr := &APIError{StatusCode: resp.StatusCode(), Raw: resp.String()}
+	if body := resp.Body(); len(body) > 0 {
+		_ = json.Unmarshal(body, apiErr)
+	}
+	if apiErr.Message == "" {
+		apiErr.Message = fmt.Sprintf("API returned %d: %s", resp.StatusCode(), resp.String())
+	}
+	return apiErr
 }
+
+// ---------- identity ----------
 
 func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 	var result MeResponse
@@ -51,6 +63,19 @@ func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 	}
 	return &result, nil
 }
+
+// GetVersion hits /version, which does not require auth. Used by `oriyn doctor`
+// to verify the API base URL is reachable and speaking the expected protocol.
+func (c *Client) GetVersion(ctx context.Context) (*VersionResponse, error) {
+	var result VersionResponse
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Get("/version")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ---------- products ----------
 
 func (c *Client) ListProducts(ctx context.Context) ([]ProductListItem, error) {
 	var result []ProductListItem
@@ -63,34 +88,7 @@ func (c *Client) ListProducts(ctx context.Context) ([]ProductListItem, error) {
 
 func (c *Client) GetProduct(ctx context.Context, id string) (*ProductDetail, error) {
 	var result ProductDetail
-	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Get("/products/" + id)
-	if err := checkResp(resp, err); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-func (c *Client) GetPersonas(ctx context.Context, productID string) (*EnrichmentData[PersonaItem], error) {
-	var result EnrichmentData[PersonaItem]
-	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Get("/products/" + productID + "/personas")
-	if err := checkResp(resp, err); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-func (c *Client) GetPatterns(ctx context.Context, productID string) (*EnrichmentData[PatternItem], error) {
-	var result EnrichmentData[PatternItem]
-	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Get("/products/" + productID + "/patterns")
-	if err := checkResp(resp, err); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-func (c *Client) GetDirection(ctx context.Context, productID string) (*EnrichmentData[DirectionItem], error) {
-	var result EnrichmentData[DirectionItem]
-	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Get("/products/" + productID + "/direction")
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Get("/products/" + url.PathEscape(id))
 	if err := checkResp(resp, err); err != nil {
 		return nil, err
 	}
@@ -99,28 +97,152 @@ func (c *Client) GetDirection(ctx context.Context, productID string) (*Enrichmen
 
 func (c *Client) Synthesize(ctx context.Context, productID string) (*StatusResponse, error) {
 	var result StatusResponse
-	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Post("/products/" + productID + "/context")
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Post("/products/" + url.PathEscape(productID) + "/context")
 	if err := checkResp(resp, err); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
+
+func (c *Client) UpdateContext(ctx context.Context, productID string, body UpdateContextRequest) (*ProductContext, error) {
+	var result ProductContext
+	resp, err := c.resty.R().SetContext(ctx).SetBody(body).SetResult(&result).
+		Patch("/products/" + url.PathEscape(productID) + "/context")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) ListContextVersions(ctx context.Context, productID string) (*ContextHistoryResponse, error) {
+	var result ContextHistoryResponse
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Get("/products/" + url.PathEscape(productID) + "/context/versions")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) GetContextVersion(ctx context.Context, productID, versionID string) (*ContextVersion, error) {
+	var result ContextVersion
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Get("/products/" + url.PathEscape(productID) + "/context/versions/" + url.PathEscape(versionID))
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) ScrapeSource(ctx context.Context, productID, sourceID string) (*StatusResponse, error) {
+	var result StatusResponse
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Post("/products/" + url.PathEscape(productID) + "/sources/" + url.PathEscape(sourceID) + "/scrape")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ---------- enrichment ----------
 
 func (c *Client) Enrich(ctx context.Context, productID string) (*StatusResponse, error) {
 	var result StatusResponse
-	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Post("/products/" + productID + "/enrich")
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Post("/products/" + url.PathEscape(productID) + "/enrich")
 	if err := checkResp(resp, err); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-func (c *Client) CreateExperiment(ctx context.Context, productID, hypothesis string) (*CreateExperimentResponse, error) {
+func (c *Client) GetPersonas(ctx context.Context, productID string) (*EnrichmentData[PersonaItem], error) {
+	var result EnrichmentData[PersonaItem]
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Get("/products/" + url.PathEscape(productID) + "/personas")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) GetPersonaProfile(ctx context.Context, productID, personaID string) (*PersonaProfileResponse, error) {
+	var result PersonaProfileResponse
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Get("/products/" + url.PathEscape(productID) + "/personas/" + url.PathEscape(personaID) + "/profile")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) GetPersonaCitations(ctx context.Context, productID, personaID string, traitIndex int) (*CitationsResponse, error) {
+	var result CitationsResponse
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		SetQueryParam("trait_index", strconv.Itoa(traitIndex)).
+		Get("/products/" + url.PathEscape(productID) + "/personas/" + url.PathEscape(personaID) + "/citations")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) GetHypotheses(ctx context.Context, productID string) (*EnrichmentData[HypothesisItem], error) {
+	var result EnrichmentData[HypothesisItem]
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Get("/products/" + url.PathEscape(productID) + "/hypotheses")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ---------- knowledge ----------
+
+func (c *Client) SearchKnowledge(ctx context.Context, productID string, body KnowledgeSearchRequest) (*KnowledgeSearchResponse, error) {
+	var result KnowledgeSearchResponse
+	resp, err := c.resty.R().SetContext(ctx).SetBody(body).SetResult(&result).
+		Post("/products/" + url.PathEscape(productID) + "/knowledge/search")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ---------- timeline / replay ----------
+
+func (c *Client) GetUserTimeline(ctx context.Context, productID, resolvedUserID string, limit int) (*TimelineResponse, error) {
+	var result TimelineResponse
+	req := c.resty.R().SetContext(ctx).SetResult(&result)
+	if limit > 0 {
+		req = req.SetQueryParam("limit", strconv.Itoa(limit))
+	}
+	resp, err := req.Get("/products/" + url.PathEscape(productID) + "/users/" + url.PathEscape(resolvedUserID) + "/timeline")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) GetSessionReplay(ctx context.Context, productID, sessionAssetID string) (*ReplayEventsResponse, error) {
+	var result ReplayEventsResponse
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Get("/products/" + url.PathEscape(productID) + "/sessions/" + url.PathEscape(sessionAssetID) + "/replay")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ---------- experiments ----------
+
+func (c *Client) CreateExperiment(ctx context.Context, productID string, body CreateExperimentRequest) (*CreateExperimentResponse, error) {
 	var result CreateExperimentResponse
 	resp, err := c.resty.R().SetContext(ctx).
 		SetResult(&result).
-		SetBody(CreateExperimentRequest{Hypothesis: hypothesis}).
-		Post("/products/" + productID + "/experiments")
+		SetBody(body).
+		Post("/products/" + url.PathEscape(productID) + "/experiments")
 	if err := checkResp(resp, err); err != nil {
 		return nil, err
 	}
@@ -130,7 +252,7 @@ func (c *Client) CreateExperiment(ctx context.Context, productID, hypothesis str
 func (c *Client) GetExperiment(ctx context.Context, productID, experimentID string) (*ExperimentResponse, error) {
 	var result ExperimentResponse
 	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
-		Get("/products/" + productID + "/experiments/" + experimentID)
+		Get("/products/" + url.PathEscape(productID) + "/experiments/" + url.PathEscape(experimentID))
 	if err := checkResp(resp, err); err != nil {
 		return nil, err
 	}
@@ -140,9 +262,19 @@ func (c *Client) GetExperiment(ctx context.Context, productID, experimentID stri
 func (c *Client) ListExperiments(ctx context.Context, productID string) ([]ExperimentListItem, error) {
 	var result []ExperimentListItem
 	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
-		Get("/products/" + productID + "/experiments")
+		Get("/products/" + url.PathEscape(productID) + "/experiments")
 	if err := checkResp(resp, err); err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+func (c *Client) ArchiveExperiment(ctx context.Context, productID, experimentID string) (*StatusResponse, error) {
+	var result StatusResponse
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Patch("/products/" + url.PathEscape(productID) + "/experiments/" + url.PathEscape(experimentID) + "/archive")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }

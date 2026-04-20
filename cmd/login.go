@@ -24,18 +24,26 @@ type callbackResult struct {
 }
 
 func newLoginCmd(app *App) *cobra.Command {
-	return &cobra.Command{
+	var noBrowser bool
+	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate with Oriyn via browser login",
+		Long: "Starts a local callback server and opens the browser for Supabase " +
+			"sign-in. Use --no-browser on headless machines or remote shells — " +
+			"the URL will be printed for you to open manually.\n\n" +
+			"For non-interactive CI/agent environments, set ORIYN_ACCESS_TOKEN " +
+			"instead of running `oriyn login`.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := runLogin(cmd.Context(), app.WebBase, app.APIBase, app.AuthStore)
+			err := runLogin(cmd.Context(), app.WebBase, app.APIBase, app.AuthStore, noBrowser, cmd.OutOrStdout())
 			app.Tracker.Capture("cli_login", map[string]interface{}{"success": err == nil})
 			return err
 		},
 	}
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Print the login URL instead of trying to open a browser")
+	return cmd
 }
 
-func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Store) error {
+func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Store, noBrowser bool, w io.Writer) error {
 	stateParam := uuid.NewString()
 	callbackCh := make(chan callbackResult, 1)
 
@@ -53,12 +61,15 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 	defer func() { _ = server.Shutdown(context.Background()) }()
 
 	loginURL := fmt.Sprintf("%s/auth/cli/login?port=%d&state=%s", webBase, port, stateParam)
-	if err := browser.OpenURL(loginURL); err != nil {
-		fmt.Printf("Open this URL in your browser:\n\n  %s\n\n", loginURL)
+
+	if noBrowser {
+		fmt.Fprintf(w, "Open this URL to log in:\n\n  %s\n\n", loginURL)
+	} else if err := browser.OpenURL(loginURL); err != nil {
+		fmt.Fprintf(w, "Could not open a browser. Open this URL manually:\n\n  %s\n\n", loginURL)
 	} else {
-		fmt.Println("Opening browser to log in...")
+		fmt.Fprintln(w, "Opening browser to log in...")
 	}
-	fmt.Println("Waiting for authentication...")
+	fmt.Fprintln(w, "Waiting for authentication...")
 
 	select {
 	case cb := <-callbackCh:
@@ -71,19 +82,18 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 			return err
 		}
 
-		// Single /v1/me call for both email and user ID (consolidated from Rust's two calls)
 		me, err := fetchMe(ctx, apiBase, creds.AccessToken)
 		if err == nil {
 			if me.userID != "" {
 				telemetry.StoreUserID(me.userID)
 			}
 			if me.email != "" {
-				fmt.Printf("Logged in as %s\n", me.email)
+				fmt.Fprintf(w, "Logged in as %s\n", me.email)
 			} else {
-				fmt.Println("Logged in successfully.")
+				fmt.Fprintln(w, "Logged in successfully.")
 			}
 		} else {
-			fmt.Println("Logged in successfully.")
+			fmt.Fprintln(w, "Logged in successfully.")
 		}
 
 		return nil
@@ -124,11 +134,6 @@ func fetchMe(ctx context.Context, apiBase, token string) (*meInfo, error) {
 		return nil, err
 	}
 	return &meInfo{userID: data.UserID, email: data.Email}, nil
-}
-
-// decodeJSON is a helper for reading JSON response bodies.
-func decodeJSON(r io.Reader, v interface{}) error {
-	return json.NewDecoder(r).Decode(v)
 }
 
 func makeCallbackHandler(expectedState string, ch chan<- callbackResult) http.HandlerFunc {

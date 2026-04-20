@@ -1,9 +1,9 @@
 <product>
 Oriyn is a behavioral intelligence layer for product teams. It instruments user behavior, builds predictive sequence models, and exposes the resulting intelligence to AI agents and humans at decision time.
 
-Two capabilities: queryable behavioral understanding of users (what they do, in what sequence, why) and prescriptive product direction (what to build next, derived from pattern detection).
+The output is experimentation at the speed of a prompt: users are clustered into grounded personas, hypotheses are mined on demand from cross-provider event sequences, and both feed simulated experiments against persona-grounded agents. We don't guess what to build — we test.
 
-Amplitude tells you what users did. Oriyn tells you what they'll do next.
+Amplitude tells you what users did. Oriyn tells you what happens if you change it.
 
 Agents act, humans observe. Agents instrument products, query behavioral cohorts, run experiments, and ship variants. PMs observe results.
 
@@ -19,11 +19,11 @@ You do not over-engineer. You do not gold-plate. You make the smallest change th
 <system>
 Oriyn is three repos:
 
-- **oriyn-api** — Python/FastAPI HTTP API on Railway. The single backend. All business logic, LLM orchestration, and data access live here.
-- **oriyn-web** — Next.js web app on Vercel. Pure frontend + SSG. All data fetching goes through oriyn-api.
+- **oriyn-api** — Python/FastAPI HTTP API on Railway. Handles long-running async work, LLM orchestration, and anything that fans out to 3rd-party services (PostHog, AI providers, etc.). Not a general-purpose data proxy.
+- **oriyn-web** — Next.js web app on Vercel. Reads and writes directly to Supabase for all CRUD operations. Calls oriyn-api only for work it cannot do inline: running experiments, triggering enrichments, or any operation that fans out to external services.
 - **oriyn-cli** — Go CLI. Thin client over oriyn-api — handles setup and auth only.
 
-The CLI and web app are two surfaces over the same backend. They do not interact with each other.
+The CLI and web app do not interact with each other. The CLI routes all calls through oriyn-api (it has no Supabase client).
 </system>
 
 <repo>
@@ -31,10 +31,6 @@ The CLI and web app are two surfaces over the same backend. They do not interact
 
 Never add logic here that belongs in the API. If a behavior needs to exist for both the CLI and the web app, it lives in `oriyn-api`.
 </repo>
-
-<core-rule>
-Make the smallest possible change to achieve the goal. Never refactor, reorganize, rename, or improve anything not directly required by the task. If it works and is not broken, leave it alone.
-</core-rule>
 
 <repository>
 - GitHub org: `oriyn-ai`
@@ -52,7 +48,7 @@ Make the smallest possible change to achieve the goal. Never refactor, reorganiz
 
 <structure>
 - `main.go` — entrypoint, version vars, cobra Execute()
-- `cmd/` — one file per cobra command (login, logout, whoami, products, personas, patterns, direction, synthesize, enrich, experiment, telemetry)
+- `cmd/` — one file per cobra command (login, logout, whoami, products, personas, hypotheses, synthesize, enrich, experiment, telemetry)
 - `cmd/root.go` — root command, global flags, Sentry init, App struct, PersistentPreRunE/PostRunE
 - `internal/auth/` — keychain read/write, token refresh, Keyring interface
 - `internal/apiclient/` — typed HTTP client wrapping resty, request/response structs

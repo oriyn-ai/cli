@@ -7,6 +7,19 @@ type MeResponse struct {
 	Email  string `json:"email"`
 }
 
+type VersionResponse struct {
+	Version string `json:"version"`
+}
+
+type ProductContext struct {
+	Company          string   `json:"company"`
+	ProductSummary   string   `json:"product_summary"`
+	CoreFeatures     []string `json:"core_features"`
+	TargetUsers      string   `json:"target_users"`
+	ValueProposition string   `json:"value_proposition"`
+	UseCases         []string `json:"use_cases"`
+}
+
 type ProductListItem struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
@@ -16,12 +29,31 @@ type ProductListItem struct {
 type ProductDetail struct {
 	ID               string          `json:"id"`
 	Name             string          `json:"name"`
-	Description      *string         `json:"description"`
-	URLs             []string        `json:"urls"`
-	Context          json.RawMessage `json:"context"`
+	Context          *ProductContext `json:"context"`
 	ContextStatus    string          `json:"context_status"`
 	EnrichmentStatus string          `json:"enrichment_status"`
 	CreatedAt        string          `json:"created_at"`
+}
+
+type UpdateContextRequest struct {
+	Company          *string   `json:"company,omitempty"`
+	ProductSummary   *string   `json:"product_summary,omitempty"`
+	CoreFeatures     *[]string `json:"core_features,omitempty"`
+	TargetUsers      *string   `json:"target_users,omitempty"`
+	ValueProposition *string   `json:"value_proposition,omitempty"`
+	UseCases         *[]string `json:"use_cases,omitempty"`
+}
+
+type ContextVersion struct {
+	ID        string         `json:"id"`
+	Version   int            `json:"version"`
+	Context   ProductContext `json:"context"`
+	Source    string         `json:"source"`
+	CreatedAt string         `json:"created_at"`
+}
+
+type ContextHistoryResponse struct {
+	Versions []ContextVersion `json:"versions"`
 }
 
 type EnrichmentData[T any] struct {
@@ -30,35 +62,81 @@ type EnrichmentData[T any] struct {
 }
 
 type PersonaItem struct {
-	ID               string          `json:"id"`
-	Name             string          `json:"name"`
-	Description      string          `json:"description"`
-	BehavioralTraits json.RawMessage `json:"behavioral_traits"`
-	SizeEstimate     int             `json:"size_estimate"`
-	GeneratedAt      string          `json:"generated_at"`
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	Description         string   `json:"description"`
+	BehavioralTraits    []string `json:"behavioral_traits"`
+	SizeEstimate        int      `json:"size_estimate"`
+	GeneratedAt         string   `json:"generated_at"`
+	Status              string   `json:"status"`
+	UpdatedAt           *string  `json:"updated_at"`
+	TraitCitationCounts []int    `json:"trait_citation_counts"`
 }
 
-type PatternItem struct {
-	ID           string          `json:"id"`
-	Title        string          `json:"title"`
-	Description  string          `json:"description"`
-	Frequency    string          `json:"frequency"`
-	Significance string          `json:"significance"`
-	RawSequence  json.RawMessage `json:"raw_sequence"`
-	GeneratedAt  string          `json:"generated_at"`
+type HypothesisItem struct {
+	Sequence         []string `json:"sequence"`
+	RenderedSequence []string `json:"rendered_sequence"`
+	Frequency        int      `json:"frequency"`
+	UserCount        int      `json:"user_count"`
+	SignificancePct  float64  `json:"significance_pct"`
+	SourceUsers      []string `json:"source_users"`
 }
 
-type RecommendationItem struct {
-	Title     string `json:"title"`
-	Rationale string `json:"rationale"`
-	Priority  string `json:"priority"`
+type CitationItem struct {
+	ID                string  `json:"id"`
+	SessionAssetID    string  `json:"session_asset_id"`
+	ExternalSessionID string  `json:"external_session_id"`
+	SessionSummary    string  `json:"session_summary"`
+	FrustrationScore  float64 `json:"frustration_score"`
+	DurationMS        int     `json:"duration_ms"`
+	RecordedAt        string  `json:"recorded_at"`
+	ReplayURL         *string `json:"replay_url"`
+	HasStoredReplay   bool    `json:"has_stored_replay"`
 }
 
-type DirectionItem struct {
-	ID              string               `json:"id"`
-	Recommendations []RecommendationItem `json:"recommendations"`
-	DerivedFrom     json.RawMessage      `json:"derived_from"`
-	GeneratedAt     string               `json:"generated_at"`
+type CitationsResponse struct {
+	Citations []CitationItem `json:"citations"`
+}
+
+type PersonaProfileResponse struct {
+	StaticFacts  []string `json:"static_facts"`
+	DynamicFacts []string `json:"dynamic_facts"`
+}
+
+type KnowledgeSearchRequest struct {
+	Query     string  `json:"query"`
+	Limit     int     `json:"limit,omitempty"`
+	Threshold float64 `json:"threshold,omitempty"`
+	Rerank    bool    `json:"rerank,omitempty"`
+}
+
+type KnowledgeSearchResult struct {
+	Content   string                 `json:"content"`
+	Score     float64                `json:"score"`
+	Metadata  map[string]interface{} `json:"metadata"`
+	CreatedAt string                 `json:"created_at"`
+}
+
+type KnowledgeSearchResponse struct {
+	Results []KnowledgeSearchResult `json:"results"`
+}
+
+type TimelineItem struct {
+	Kind             string                 `json:"kind"`
+	Provider         string                 `json:"provider"`
+	ExternalID       string                 `json:"external_id"`
+	EventName        string                 `json:"event_name"`
+	Timestamp        string                 `json:"timestamp"`
+	Properties       map[string]interface{} `json:"properties"`
+	SessionAssetID   *string                `json:"session_asset_id"`
+	DurationMS       *int                   `json:"duration_ms"`
+	SessionSummary   *string                `json:"session_summary"`
+	FrustrationScore *float64               `json:"frustration_score"`
+	HasStoredReplay  bool                   `json:"has_stored_replay"`
+}
+
+type TimelineResponse struct {
+	Items []TimelineItem `json:"items"`
 }
 
 type StatusResponse struct {
@@ -67,26 +145,27 @@ type StatusResponse struct {
 
 type CreateExperimentRequest struct {
 	Hypothesis string `json:"hypothesis"`
+	AgentCount *int   `json:"agent_count,omitempty"`
 }
 
 type CreateExperimentResponse struct {
 	ExperimentID string `json:"experiment_id"`
 }
 
-type ExperimentSummary struct {
-	Verdict          string                 `json:"verdict"`
-	Convergence      float32                `json:"convergence"`
-	Summary          string                 `json:"summary"`
-	PersonaBreakdown []PersonaBreakdownItem `json:"persona_breakdown"`
-	QuestionResults  json.RawMessage        `json:"question_results"`
-	AgentCount       int                    `json:"agent_count"`
-}
-
 type PersonaBreakdownItem struct {
 	Persona      string  `json:"persona"`
 	Response     string  `json:"response"`
 	Reasoning    string  `json:"reasoning"`
-	AdoptionRate float32 `json:"adoption_rate"`
+	AdoptionRate float64 `json:"adoption_rate"`
+}
+
+type ExperimentSummary struct {
+	Verdict          string                 `json:"verdict"`
+	Convergence      float64                `json:"convergence"`
+	Summary          string                 `json:"summary"`
+	PersonaBreakdown []PersonaBreakdownItem `json:"persona_breakdown"`
+	QuestionResults  json.RawMessage        `json:"question_results"`
+	AgentCount       int                    `json:"agent_count"`
 }
 
 type ExperimentResponse struct {
@@ -100,10 +179,36 @@ type ExperimentResponse struct {
 }
 
 type ExperimentListItem struct {
-	ID             string  `json:"id"`
-	Hypothesis     string  `json:"hypothesis"`
-	Status         string  `json:"status"`
-	Verdict        *string `json:"verdict"`
-	CreatedByEmail string  `json:"created_by_email"`
-	CreatedAt      string  `json:"created_at"`
+	ID             string   `json:"id"`
+	Title          *string  `json:"title"`
+	Hypothesis     string   `json:"hypothesis"`
+	Status         string   `json:"status"`
+	Verdict        *string  `json:"verdict"`
+	Convergence    *float64 `json:"convergence"`
+	CreatedByEmail string   `json:"created_by_email"`
+	CreatedAt      string   `json:"created_at"`
+}
+
+type ReplayEventsResponse struct {
+	Events []map[string]interface{} `json:"events"`
+}
+
+// APIError is returned when the API responds with a structured error body.
+// The Oriyn API always includes an "error" field; credits/agent-count errors
+// carry additional fields that agents can read to self-correct.
+type APIError struct {
+	StatusCode       int    `json:"-"`
+	Message          string `json:"error"`
+	CreditsRequired  *int   `json:"credits_required,omitempty"`
+	CreditsAvailable *int   `json:"credits_available,omitempty"`
+	MaxAgentCount    *int   `json:"max_agent_count,omitempty"`
+	Plan             string `json:"plan,omitempty"`
+	Raw              string `json:"-"`
+}
+
+func (e *APIError) Error() string {
+	if e.Message == "" {
+		return e.Raw
+	}
+	return e.Message
 }

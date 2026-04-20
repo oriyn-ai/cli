@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"embed"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/getsentry/sentry-go"
 	"github.com/spf13/cobra"
 
@@ -24,13 +27,20 @@ type App struct {
 	WebBase   string
 }
 
-func Execute(version, commit string) error {
+// Execute wires commands, resolves flags, and maps terminal errors into exit
+// codes that coding agents can branch on without parsing messages. See
+// classifyError in output.go for the full table.
+//
+// skills carries the embedded skill tree from main. Callers must pass the FS
+// that main.go declared with //go:embed — see embedded.go at the module root.
+func Execute(version, commit string, skills embed.FS) int {
+	skillFS = skills
 	app := &App{}
 
 	rootCmd := &cobra.Command{
 		Use:     "oriyn",
-		Short:   "Oriyn CLI — query customer behavioral intelligence from the command line",
-		Version: version,
+		Short:   "Oriyn CLI — predict how users will respond to a change before shipping it",
+		Version: fmt.Sprintf("%s (%s)", version, commit),
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			env := "production"
 			if version == "dev" {
@@ -55,6 +65,15 @@ func Execute(version, commit string) error {
 				})
 			}
 
+			// Agents pipe output, so disable color when agent-mode is implied
+			// to keep JSON surrounds clean and stderr readable.
+			if quiet, _ := cmd.Root().PersistentFlags().GetBool("quiet"); quiet {
+				color.NoColor = true
+			}
+			if v := strings.ToLower(os.Getenv("ORIYN_AGENT")); v == "1" || v == "true" {
+				color.NoColor = true
+			}
+
 			app.AuthStore = auth.NewStore()
 			app.APIBase, _ = cmd.Flags().GetString("api-base")
 			app.WebBase, _ = cmd.Flags().GetString("web-base")
@@ -74,17 +93,23 @@ func Execute(version, commit string) error {
 		SilenceErrors: true,
 	}
 
-	rootCmd.PersistentFlags().String("api-base", "https://api.oriyn.ai", "Base URL for the Oriyn API")
-	rootCmd.PersistentFlags().String("web-base", "https://app.oriyn.ai", "Base URL for the Oriyn web app")
+	rootCmd.PersistentFlags().String("api-base", envOr("ORIYN_API_BASE", "https://api.oriyn.ai"), "Base URL for the Oriyn API")
+	rootCmd.PersistentFlags().String("web-base", envOr("ORIYN_WEB_BASE", "https://app.oriyn.ai"), "Base URL for the Oriyn web app")
+	rootCmd.PersistentFlags().Bool("quiet", false, "Suppress non-essential output; implies --json on commands that support it")
 
 	rootCmd.AddCommand(
+		newInitCmd(app),
 		newLoginCmd(app),
 		newLogoutCmd(app),
 		newWhoamiCmd(app),
+		newDoctorCmd(app, version, commit),
+		newSkillCmd(app),
 		newProductsCmd(app),
 		newPersonasCmd(app),
-		newPatternsCmd(app),
-		newDirectionCmd(app),
+		newHypothesesCmd(app),
+		newKnowledgeCmd(app),
+		newTimelineCmd(app),
+		newReplayCmd(app),
 		newSynthesizeCmd(app),
 		newEnrichCmd(app),
 		newExperimentCmd(app),
@@ -106,9 +131,17 @@ func Execute(version, commit string) error {
 			sentry.CaptureException(err)
 			sentry.Flush(2 * time.Second)
 		}
-		return fmt.Errorf("Error: %w", err)
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		return classifyError(err)
 	}
-	return nil
+	return 0
+}
+
+func envOr(name, fallback string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func redactTokens(s string) string {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/oriyn-ai/cli/cmd"
@@ -13,8 +12,5 @@ var (
 )
 
 func main() {
-	if err := cmd.Execute(version, commit); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	os.Exit(cmd.Execute(version, commit, SkillFiles))
 }
