@@ -7,10 +7,6 @@ type MeResponse struct {
 	Email  string `json:"email"`
 }
 
-type VersionResponse struct {
-	Version string `json:"version"`
-}
-
 type ProductContext struct {
 	Company          string   `json:"company"`
 	ProductSummary   string   `json:"product_summary"`

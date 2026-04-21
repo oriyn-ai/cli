@@ -20,9 +20,13 @@ type Client struct {
 	resty *resty.Client
 }
 
+// apiVersion is the API version prefix every authenticated call routes through.
+// Bump this when the server introduces /v2 and the CLI is ready to switch.
+const apiVersion = "/v1"
+
 func New(apiBase string, auth AuthProvider) *Client {
 	r := resty.New().
-		SetBaseURL(apiBase).
+		SetBaseURL(apiBase + apiVersion).
 		SetHeader("Content-Type", "application/json").
 		OnBeforeRequest(func(_ *resty.Client, req *resty.Request) error {
 			token, err := auth.GetValidAccessToken(req.Context())
@@ -57,18 +61,7 @@ func checkResp(resp *resty.Response, err error) error {
 
 func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 	var result MeResponse
-	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Get("/v1/me")
-	if err := checkResp(resp, err); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// GetVersion hits /version, which does not require auth. Used by `oriyn doctor`
-// to verify the API base URL is reachable and speaking the expected protocol.
-func (c *Client) GetVersion(ctx context.Context) (*VersionResponse, error) {
-	var result VersionResponse
-	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Get("/version")
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Get("/me")
 	if err := checkResp(resp, err); err != nil {
 		return nil, err
 	}
