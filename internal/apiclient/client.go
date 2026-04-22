@@ -47,8 +47,33 @@ func checkResp(resp *resty.Response, err error) error {
 	if !resp.IsError() {
 		return nil
 	}
+
+	// FastAPI wraps validated errors in {"detail": ...}. Permission denials
+	// specifically include a required_permission field — lift those into a
+	// typed PermissionError so the CLI can render a friendly message and
+	// exit with a dedicated code.
+	body := resp.Body()
+	if resp.StatusCode() == 403 && len(body) > 0 {
+		var envelope struct {
+			Detail struct {
+				Error              string `json:"error"`
+				RequiredPermission string `json:"required_permission"`
+				Role               string `json:"role"`
+				OrgID              string `json:"org_id"`
+			} `json:"detail"`
+		}
+		if jsonErr := json.Unmarshal(body, &envelope); jsonErr == nil && envelope.Detail.RequiredPermission != "" {
+			return &PermissionError{
+				StatusCode:         resp.StatusCode(),
+				RequiredPermission: envelope.Detail.RequiredPermission,
+				Role:               envelope.Detail.Role,
+				OrgID:              envelope.Detail.OrgID,
+			}
+		}
+	}
+
 	apiErr := &APIError{StatusCode: resp.StatusCode(), Raw: resp.String()}
-	if body := resp.Body(); len(body) > 0 {
+	if len(body) > 0 {
 		_ = json.Unmarshal(body, apiErr)
 	}
 	if apiErr.Message == "" {
