@@ -18,10 +18,11 @@ import (
 // 0 reserved for success via cobra's default. Anything else is surfaced by the
 // Execute loop — see root.go.
 const (
-	ExitUserError      = 1 // flag misuse, missing required input
-	ExitAPIError       = 2 // API returned 4xx/5xx
-	ExitSessionExpired = 3 // credentials missing or refused by Supabase
-	ExitNetworkError   = 4 // couldn't reach the API at all
+	ExitUserError        = 1 // flag misuse, missing required input
+	ExitAPIError         = 2 // API returned 4xx/5xx
+	ExitSessionExpired   = 3 // credentials missing or refused by Supabase
+	ExitNetworkError     = 4 // couldn't reach the API at all
+	ExitPermissionDenied = 5 // API returned 403 with a permission payload
 )
 
 // agentMode returns true when the caller wants machine-readable output with no
@@ -62,6 +63,10 @@ func classifyError(err error) int {
 	}
 	if errors.Is(err, auth.ErrNotLoggedIn) || errors.Is(err, auth.ErrSessionExpired) {
 		return ExitSessionExpired
+	}
+	var permErr *apiclient.PermissionError
+	if errors.As(err, &permErr) {
+		return ExitPermissionDenied
 	}
 	var apiErr *apiclient.APIError
 	if errors.As(err, &apiErr) {
