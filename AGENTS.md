@@ -32,6 +32,8 @@ Staff-level systems engineer specializing in Go CLI tooling. Systems thinker. Ap
 - Sentry scrubs Bearer tokens and sensitive extras before sending.
 - CI secrets go through GitHub Actions `${{ secrets.NAME }}`.
 - Release tag format: `vX.Y.Z`; version injected via ldflags (`-X main.version=...`, `-X main.commit=...`).
+- Every commit uses a [conventional-commit](https://www.conventionalcommits.org/) prefix: `feat:` (minor bump), `fix:` (patch bump), `chore:` / `docs:` / `ci:` / `refactor:` / `test:` / `style:` / `perf:` / `build:` (no bump). Breaking changes: `feat!:` / `fix!:` or a `BREAKING CHANGE:` footer. `release-please` (see `.github/workflows/release.yml`) reads these to decide version bumps and open the release PR; commits without a conforming prefix are silently dropped from the CHANGELOG and never become a release.
+- Every change ships as a full `git add → git commit → git push` round-trip. Do not leave uncommitted changes in the tree or unpushed commits on `main` — each logical change completes the loop so the release PR stays accurate and CI gates every merge.
 - No new dependencies without explicit justification logged in `/decisions/`.
 - Log multi-task decisions in `/decisions/{topic}-YYYY-MM-DD.md`; grep there before making a similar decision.
 - The standard isn't "good enough" — boil the ocean. Finish the thing, with tests, in one shot.
