@@ -16,7 +16,7 @@ This repo is a thin Go client over `oriyn-api` — all business logic lives ther
 ### Quick install (macOS / Linux)
 
 ```bash
-curl -fsSL https://install.oriyn.ai | bash
+curl -fsSL https://oriyn.ai/install.sh | bash
 ```
 
 ### From source
