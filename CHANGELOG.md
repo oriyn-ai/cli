@@ -8,6 +8,19 @@ Format: `## [version] - YYYY-MM-DD` followed by Added / Changed / Fixed sections
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-24
+
+### Changed
+- **BREAKING:** `oriyn skill install` now fetches the skill from `https://oriyn.ai/skill.md` on every invocation. No copy of the skill is embedded in the binary. First install requires network; after that, the agent reads the installed copy offline. Use `--url <file-path>` to install from a local file for development or air-gapped environments.
+- Single source of truth: the marketing app's `public/skill.md` is the only editable skill source. Drift between the CLI's embedded copy and the published URL is structurally impossible now — see `decisions/skill-remote-fetch-2026-04-24.md`.
+
+### Added
+- `oriyn skill update` — idempotent re-fetch of the skill from oriyn.ai. Equivalent to `oriyn skill install --force`. Use when the remote skill has been updated.
+- `oriyn skill print --url <path>` — print any skill source (remote URL or local file) to stdout without installing.
+
+### Removed
+- `cli/skills/oriyn/` (SKILL.md + README.md + references/) and `cli/embedded.go` — no content ships in the binary anymore.
+
 ## [0.3.0] - 2026-04-20
 
 ### Added
