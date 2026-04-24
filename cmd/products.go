@@ -139,8 +139,6 @@ func printProductDetail(w io.Writer, product *apiclient.ProductDetail) {
 	}
 }
 
-// ---------- context subcommand ----------
-
 func newProductsContextCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context",
@@ -311,8 +309,6 @@ func newContextVersionCmd(app *App) *cobra.Command {
 	return cmd
 }
 
-// ---------- scrape subcommand ----------
-
 func newProductsScrapeCmd(app *App) *cobra.Command {
 	var productID, sourceID string
 	cmd := &cobra.Command{
@@ -335,6 +331,4 @@ func newProductsScrapeCmd(app *App) *cobra.Command {
 	return cmd
 }
 
-// readStdin is a small indirection so subcommands can share stdin reading
-// without each importing os directly.
 func readStdin() io.Reader { return stdinReader }

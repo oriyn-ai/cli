@@ -10,18 +10,16 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-// AuthProvider supplies a valid access token for API requests.
 type AuthProvider interface {
 	GetValidAccessToken(ctx context.Context) (string, error)
 }
 
-// Client is a typed wrapper around the Oriyn API.
 type Client struct {
 	resty *resty.Client
 }
 
-// apiVersion is the API version prefix every authenticated call routes through.
-// Bump this when the server introduces /v2 and the CLI is ready to switch.
+// apiVersion is the prefix every authenticated call routes through. Bump when
+// the server introduces /v2 and the CLI is ready to switch.
 const apiVersion = "/v1"
 
 func New(apiBase string, auth AuthProvider) *Client {
@@ -82,8 +80,6 @@ func checkResp(resp *resty.Response, err error) error {
 	return apiErr
 }
 
-// ---------- identity ----------
-
 func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 	var result MeResponse
 	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).Get("/me")
@@ -92,8 +88,6 @@ func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 	}
 	return &result, nil
 }
-
-// ---------- products ----------
 
 func (c *Client) ListProducts(ctx context.Context) ([]ProductListItem, error) {
 	var result []ProductListItem
@@ -162,8 +156,6 @@ func (c *Client) ScrapeSource(ctx context.Context, productID, sourceID string) (
 	}
 	return &result, nil
 }
-
-// ---------- enrichment ----------
 
 func (c *Client) Enrich(ctx context.Context, productID string) (*StatusResponse, error) {
 	var result StatusResponse
@@ -236,8 +228,6 @@ func (c *Client) GetBottlenecks(ctx context.Context, productID string) (*Enrichm
 	return &result, nil
 }
 
-// ---------- knowledge ----------
-
 func (c *Client) SearchKnowledge(ctx context.Context, productID string, body KnowledgeSearchRequest) (*KnowledgeSearchResponse, error) {
 	var result KnowledgeSearchResponse
 	resp, err := c.resty.R().SetContext(ctx).SetBody(body).SetResult(&result).
@@ -247,8 +237,6 @@ func (c *Client) SearchKnowledge(ctx context.Context, productID string, body Kno
 	}
 	return &result, nil
 }
-
-// ---------- timeline / replay ----------
 
 func (c *Client) GetUserTimeline(ctx context.Context, productID, resolvedUserID string, limit int) (*TimelineResponse, error) {
 	var result TimelineResponse
@@ -272,8 +260,6 @@ func (c *Client) GetSessionReplay(ctx context.Context, productID, sessionAssetID
 	}
 	return &result, nil
 }
-
-// ---------- experiments ----------
 
 func (c *Client) CreateExperiment(ctx context.Context, productID string, body CreateExperimentRequest) (*CreateExperimentResponse, error) {
 	var result CreateExperimentResponse

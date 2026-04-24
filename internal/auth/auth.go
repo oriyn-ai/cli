@@ -44,7 +44,6 @@ func (defaultKeyring) Get(service, user string) (string, error)            { ret
 func (defaultKeyring) Set(service, user, password string) error            { return keyring.Set(service, user, password) }
 func (defaultKeyring) Delete(service, user string) error                   { return keyring.Delete(service, user) }
 
-// Store manages credential persistence in the OS keychain.
 type Store struct {
 	keyring Keyring
 	http    *http.Client

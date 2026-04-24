@@ -15,9 +15,6 @@ import (
 	"github.com/oriyn-ai/cli/internal/auth"
 )
 
-// newDoctorCmd is an agent-first health check — one command that tells a
-// coding agent whether it can actually use Oriyn right now. Prints a series
-// of checks, exits non-zero on any failure so CI / agent scripts can gate on it.
 func newDoctorCmd(app *App, version, commit string) *cobra.Command {
 	var jsonOutput bool
 	cmd := &cobra.Command{
@@ -72,7 +69,6 @@ func runDoctorChecks(ctx context.Context, app *App, version, commit string) doct
 		APIBase: app.APIBase,
 	}
 
-	// 1. Auth — present in keychain or env override
 	authCheck := doctorCheck{Name: "auth"}
 	if _, err := app.AuthStore.GetValidAccessToken(ctx); err != nil {
 		authCheck.Detail = err.Error()
@@ -87,8 +83,6 @@ func runDoctorChecks(ctx context.Context, app *App, version, commit string) doct
 	}
 	report.Checks = append(report.Checks, authCheck)
 
-	// 2. API reachability via /version (no auth required) — called directly
-	// so the check works even when the keychain is empty.
 	reachCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	apiCheck := doctorCheck{Name: "api-reachable"}
@@ -100,7 +94,6 @@ func runDoctorChecks(ctx context.Context, app *App, version, commit string) doct
 	}
 	report.Checks = append(report.Checks, apiCheck)
 
-	// 3. /v1/me as the end-to-end auth-through-API check (only if auth passed)
 	meCheck := doctorCheck{Name: "whoami"}
 	if authCheck.OK {
 		if me, err := app.API.GetMe(ctx); err != nil {

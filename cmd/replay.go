@@ -10,8 +10,6 @@ import (
 
 func newReplayCmd(app *App) *cobra.Command {
 	var productID, sessionAssetID, outputPath string
-	// rrweb payloads are not human-readable, so default to JSON for humans
-	// and always write to a file when --output is given.
 	var jsonOutput bool
 
 	cmd := &cobra.Command{

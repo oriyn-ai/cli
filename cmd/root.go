@@ -17,7 +17,6 @@ import (
 
 const sentryDSN = "https://7a9c0f680579c791f90ecee37a16375f@o4510953905651712.ingest.us.sentry.io/4511156841283584"
 
-// App holds shared dependencies available to all commands.
 type App struct {
 	AuthStore *auth.Store
 	API       *apiclient.Client
@@ -26,9 +25,7 @@ type App struct {
 	WebBase   string
 }
 
-// Execute wires commands, resolves flags, and maps terminal errors into exit
-// codes that coding agents can branch on without parsing messages. See
-// classifyError in output.go for the full table.
+// Execute runs the root command and returns a process exit code.
 func Execute(version, commit string) int {
 	app := &App{}
 
@@ -50,7 +47,6 @@ func Execute(version, commit string) int {
 					return scrubEvent(event)
 				},
 			}); err != nil {
-				// Sentry init failure is non-fatal
 				_ = err
 			}
 
@@ -60,8 +56,6 @@ func Execute(version, commit string) int {
 				})
 			}
 
-			// Agents pipe output, so disable color when agent-mode is implied
-			// to keep JSON surrounds clean and stderr readable.
 			if quiet, _ := cmd.Root().PersistentFlags().GetBool("quiet"); quiet {
 				color.NoColor = true
 			}

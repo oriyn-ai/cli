@@ -13,7 +13,6 @@ import (
 
 const posthogAPIKey = "phc_RpuEAMMomACJxc7hG4mRMKURklt2BXtfzzwYQYlzr0W"
 
-// Tracker captures anonymous usage telemetry via PostHog.
 type Tracker struct {
 	client     posthog.Client
 	distinctID string
@@ -64,8 +63,6 @@ func (t *Tracker) Close() {
 		_ = t.client.Close()
 	}
 }
-
-// Config directory helpers
 
 func configDir() string {
 	home, err := os.UserHomeDir()
@@ -121,7 +118,6 @@ func sentinelFileExists() bool {
 	return err == nil
 }
 
-// Manage handles the telemetry enable/disable/status command.
 func Manage(disable, enable, status bool, version string) {
 	flagPath := filepath.Join(configDir(), "telemetry-disabled")
 

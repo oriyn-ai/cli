@@ -14,9 +14,6 @@ import (
 	"github.com/oriyn-ai/cli/internal/auth"
 )
 
-// Exit codes used by the CLI so coding agents can branch deterministically.
-// 0 reserved for success via cobra's default. Anything else is surfaced by the
-// Execute loop — see root.go.
 const (
 	ExitUserError        = 1 // flag misuse, missing required input
 	ExitAPIError         = 2 // API returned 4xx/5xx
@@ -25,12 +22,6 @@ const (
 	ExitPermissionDenied = 5 // API returned 403 with a permission payload
 )
 
-// agentMode returns true when the caller wants machine-readable output with no
-// interactive niceties. Any of these opt in:
-//   - --json on the command (callers wire this flag)
-//   - --quiet on the root command
-//   - ORIYN_AGENT=1 in the environment
-//   - stdout is not a TTY (common when piped through jq)
 func agentMode(cmd *cobra.Command, explicitJSON bool) bool {
 	if explicitJSON {
 		return true
@@ -44,8 +35,6 @@ func agentMode(cmd *cobra.Command, explicitJSON bool) bool {
 	return false
 }
 
-// printJSON writes the given value as compact JSON followed by a newline.
-// All agent-mode output flows through here so the contract is uniform.
 func printJSON(w io.Writer, v interface{}) error {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -55,8 +44,6 @@ func printJSON(w io.Writer, v interface{}) error {
 	return nil
 }
 
-// classifyError maps an error into a CLI exit code. Keep the mapping tight —
-// the goal is to let agents branch on reason without parsing messages.
 func classifyError(err error) int {
 	if err == nil {
 		return 0
@@ -78,8 +65,6 @@ func classifyError(err error) int {
 	return ExitUserError
 }
 
-// readHypothesis returns the hypothesis string from --hypothesis or stdin.
-// Agents that generate long multiline proposals usually prefer to pipe them.
 func readHypothesis(cmd *cobra.Command, flagValue string, fromStdin bool) (string, error) {
 	if fromStdin {
 		if flagValue != "" {
