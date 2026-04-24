@@ -12,5 +12,5 @@ var (
 )
 
 func main() {
-	os.Exit(cmd.Execute(version, commit, SkillFiles))
+	os.Exit(cmd.Execute(version, commit))
 }

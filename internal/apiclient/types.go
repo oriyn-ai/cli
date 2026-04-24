@@ -81,6 +81,15 @@ type HypothesisItem struct {
 	SourceUsers      []string `json:"source_users"`
 }
 
+type BottleneckItem struct {
+	Sequence           []string `json:"sequence"`
+	RenderedSequence   []string `json:"rendered_sequence"`
+	Traversals         int      `json:"traversals"`
+	UserCount          int      `json:"user_count"`
+	AvgDurationSeconds float64  `json:"avg_duration_seconds"`
+	SourceUsers        []string `json:"source_users"`
+}
+
 type CitationItem struct {
 	ID                string  `json:"id"`
 	SessionAssetID    string  `json:"session_asset_id"`

@@ -40,7 +40,7 @@ func newInitCmd(app *App) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := installEmbeddedSkill(w, dest, force); err != nil {
+				if err := installSkill(ctx, w, dest, "", force); err != nil {
 					return err
 				}
 			}

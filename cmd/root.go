@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"embed"
 	"fmt"
 	"os"
 	"strings"
@@ -30,11 +29,7 @@ type App struct {
 // Execute wires commands, resolves flags, and maps terminal errors into exit
 // codes that coding agents can branch on without parsing messages. See
 // classifyError in output.go for the full table.
-//
-// skills carries the embedded skill tree from main. Callers must pass the FS
-// that main.go declared with //go:embed — see embedded.go at the module root.
-func Execute(version, commit string, skills embed.FS) int {
-	skillFS = skills
+func Execute(version, commit string) int {
 	app := &App{}
 
 	rootCmd := &cobra.Command{

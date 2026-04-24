@@ -216,6 +216,26 @@ func (c *Client) GetHypotheses(ctx context.Context, productID string) (*Enrichme
 	return &result, nil
 }
 
+func (c *Client) RefreshHypotheses(ctx context.Context, productID string) (*StatusResponse, error) {
+	var result StatusResponse
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Post("/products/" + url.PathEscape(productID) + "/hypotheses/refresh")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) GetBottlenecks(ctx context.Context, productID string) (*EnrichmentData[BottleneckItem], error) {
+	var result EnrichmentData[BottleneckItem]
+	resp, err := c.resty.R().SetContext(ctx).SetResult(&result).
+		Get("/products/" + url.PathEscape(productID) + "/bottlenecks")
+	if err := checkResp(resp, err); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ---------- knowledge ----------
 
 func (c *Client) SearchKnowledge(ctx context.Context, productID string, body KnowledgeSearchRequest) (*KnowledgeSearchResponse, error) {
