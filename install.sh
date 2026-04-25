@@ -31,6 +31,11 @@ banner() {
     printf "\n"
 }
 
+tmp=""
+tmp_checksums=""
+cleanup() { rm -f "$tmp" "$tmp_checksums"; }
+trap cleanup EXIT
+
 detect_target() {
     local os arch
     os="$(uname -s)"
@@ -105,10 +110,8 @@ main() {
         step "Installing version: ${BOLD}v${version}${RESET}"
     fi
 
-    local tmp tmp_checksums
     tmp="$(mktemp)"
     tmp_checksums="$(mktemp)"
-    trap 'rm -f "$tmp" "$tmp_checksums"' EXIT
 
     step "Downloading ${binary_name}..."
     curl -fSL --progress-bar -o "$tmp" "$binary_url" \
