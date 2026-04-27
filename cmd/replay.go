@@ -30,6 +30,7 @@ func newReplayCmd(app *App) *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("serializing replay: %w", err)
 				}
+				//nolint:gosec // G306: user-supplied --output path; standard 0o644 file perms.
 				if err := os.WriteFile(outputPath, data, 0o644); err != nil {
 					return fmt.Errorf("writing %s: %w", outputPath, err)
 				}

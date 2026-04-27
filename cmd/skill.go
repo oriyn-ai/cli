@@ -26,7 +26,7 @@ const (
 	skillFetchTimeout  = 15 * time.Second
 )
 
-func newSkillCmd(app *App) *cobra.Command {
+func newSkillCmd(_ *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "skill",
 		Short: "Manage the Oriyn agent skill",
@@ -180,6 +180,7 @@ func installSkill(ctx context.Context, out io.Writer, destDir, sourceURL string,
 		return err
 	}
 
+	//nolint:gosec // G301: skill install dir lives inside the user's project; standard 0o755 perms.
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return fmt.Errorf("creating %s: %w", destDir, err)
 	}
@@ -193,6 +194,7 @@ func installSkill(ctx context.Context, out io.Writer, destDir, sourceURL string,
 		}
 	}
 
+	//nolint:gosec // G306: skill file lives inside the user's project; standard 0o644 perms.
 	if err := os.WriteFile(target, data, 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", target, err)
 	}

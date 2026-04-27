@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -56,7 +57,7 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 
-	server := &http.Server{Handler: mux}
+	server := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = server.Serve(listener) }()
 	defer func() { _ = server.Shutdown(context.Background()) }()
 
@@ -146,9 +147,11 @@ func makeCallbackHandler(expectedState string, ch chan<- callbackResult) http.Ha
 			return
 		}
 
-		expiresIn := int64(0)
+		var expiresIn int64
 		if v := q.Get("expires_in"); v != "" {
-			fmt.Sscanf(v, "%d", &expiresIn)
+			if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+				expiresIn = parsed
+			}
 		}
 
 		ch <- callbackResult{

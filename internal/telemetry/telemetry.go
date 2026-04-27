@@ -11,6 +11,10 @@ import (
 	"github.com/posthog/posthog-go"
 )
 
+// PostHog write-only client key — safe to ship in OSS binaries; equivalent
+// to a public publishable key. See posthog.com/docs/api#authentication.
+//
+//nolint:gosec // G101: not a credential — public PostHog client key.
 const posthogAPIKey = "phc_RpuEAMMomACJxc7hG4mRMKURklt2BXtfzzwYQYlzr0W"
 
 type Tracker struct {
@@ -74,8 +78,8 @@ func configDir() string {
 
 func StoreUserID(id string) {
 	dir := configDir()
-	_ = os.MkdirAll(dir, 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "user-id"), []byte(id), 0o644)
+	_ = os.MkdirAll(dir, 0o700)
+	_ = os.WriteFile(filepath.Join(dir, "user-id"), []byte(id), 0o600)
 }
 
 func ClearUserID() {
@@ -103,8 +107,8 @@ func loadOrCreateAnonymousID() string {
 		}
 	}
 	id := uuid.NewString()
-	_ = os.MkdirAll(configDir(), 0o755)
-	_ = os.WriteFile(path, []byte(id), 0o644)
+	_ = os.MkdirAll(configDir(), 0o700)
+	_ = os.WriteFile(path, []byte(id), 0o600)
 	return id
 }
 
@@ -121,14 +125,15 @@ func sentinelFileExists() bool {
 func Manage(disable, enable, status bool, version string) {
 	flagPath := filepath.Join(configDir(), "telemetry-disabled")
 
-	if disable {
-		_ = os.MkdirAll(configDir(), 0o755)
-		_ = os.WriteFile(flagPath, []byte(""), 0o644)
+	switch {
+	case disable:
+		_ = os.MkdirAll(configDir(), 0o700)
+		_ = os.WriteFile(flagPath, []byte(""), 0o600)
 		fmt.Println("Telemetry disabled.")
-	} else if enable {
+	case enable:
 		_ = os.Remove(flagPath)
 		fmt.Println("Telemetry enabled.")
-	} else if status {
+	case status:
 		disabled := version == "dev" || isEnvDisabled() || sentinelFileExists()
 		if disabled {
 			fmt.Println("Telemetry: disabled")
