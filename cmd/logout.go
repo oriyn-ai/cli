@@ -4,8 +4,6 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-
-	"github.com/oriyn-ai/cli/internal/telemetry"
 )
 
 func newLogoutCmd(app *App) *cobra.Command {
@@ -16,8 +14,8 @@ func newLogoutCmd(app *App) *cobra.Command {
 			if err := app.AuthStore.Delete(); err != nil {
 				return err
 			}
-			telemetry.ClearUserID()
 			app.Tracker.Capture("cli_logout", nil)
+			app.Tracker.Reset()
 			fmt.Fprintln(cmd.OutOrStdout(), "Logged out.")
 			return nil
 		},
