@@ -30,6 +30,11 @@ type App struct {
 	// timer. cobra's PostRunE only fires on success, so we can't rely
 	// on a defer there.
 	commandStartedAt time.Time
+	// commandTop / commandSub are captured at PreRunE so the
+	// completion event uses the same identifiers the started event
+	// did, even on the error path where cmd is no longer in scope.
+	commandTop string
+	commandSub string
 }
 
 // Execute runs the root command and returns a process exit code.
@@ -93,15 +98,22 @@ func Execute(version, commit string) int {
 			}
 
 			app.commandStartedAt = time.Now()
-			cmdName := commandPath(cmd)
-			app.Tracker.TrackCommand(cmdName)
-			trackFlagsAndOptions(app.Tracker, cmd, cmdName)
+			top, sub := splitCommandPath(cmd)
+			app.commandTop = top
+			app.commandSub = sub
+			dispatchTrackCommand(app.Tracker, top, sub)
+			cmdLabel := top
+			if sub != "" {
+				cmdLabel = top + " " + sub
+			}
+			trackFlagsAndOptions(app.Tracker, cmd, cmdLabel)
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
 			if app.Tracker != nil {
 				app.Tracker.TrackCommandComplete(
-					commandPath(cmd),
+					app.commandTop,
+					app.commandSub,
 					time.Since(app.commandStartedAt),
 					nil,
 				)
@@ -140,15 +152,18 @@ func Execute(version, commit string) int {
 	)
 
 	if err := rootCmd.Execute(); err != nil {
-		// CalledAs is empty on errors at the root (e.g. unknown
-		// subcommand); fall back to "root" so dashboards still group.
-		cmdPath := rootCmd.CalledAs()
-		if cmdPath == "" {
-			cmdPath = "root"
+		// PreRunE may not have fired (e.g. unknown subcommand fails
+		// during cobra's argument parsing). Fall back to "root" so
+		// dashboards still group these.
+		top := app.commandTop
+		sub := app.commandSub
+		if top == "" {
+			top = "root"
 		}
 		if app.Tracker != nil {
 			app.Tracker.TrackCommandComplete(
-				cmdPath,
+				top,
+				sub,
 				time.Since(app.commandStartedAt),
 				err,
 			)
@@ -190,25 +205,78 @@ func trackFlagsAndOptions(t *telemetry.Client, cmd *cobra.Command, cmdName strin
 	})
 }
 
-// commandPath returns the dot-joined path of the cobra command for
-// telemetry, e.g. "products list" rather than just "list". Stable
-// across releases, since each verb is renamed at most once.
-func commandPath(cmd *cobra.Command) string {
+// splitCommandPath extracts the top-level command name and the
+// space-joined subcommand path from a cobra command. For
+// `oriyn products list` it returns ("products", "list"). For a
+// top-level command without subcommands it returns (name, "").
+// For the bare root command it returns ("root", "").
+func splitCommandPath(cmd *cobra.Command) (top, sub string) {
 	if cmd == nil {
-		return "root"
+		return "root", ""
 	}
 	parts := []string{}
 	for c := cmd; c != nil && c.Name() != ""; c = c.Parent() {
-		// Skip the root binary name to keep the value short.
 		if c.Parent() == nil {
 			break
 		}
 		parts = append([]string{c.Name()}, parts...)
 	}
-	if len(parts) == 0 {
-		return "root"
+	switch len(parts) {
+	case 0:
+		return "root", ""
+	case 1:
+		return parts[0], ""
+	default:
+		return parts[0], strings.Join(parts[1:], " ")
 	}
-	return strings.Join(parts, " ")
+}
+
+// dispatchTrackCommand routes a cobra invocation to the typed
+// TrackCliCommand{X} method on the telemetry client. The switch is
+// the allowlist: adding a new top-level cobra command without adding
+// a case here means it lands in the default branch and is captured
+// as TrackCliCommandRoot, which the test suite asserts is unreachable
+// for known commands. Keep alphabetical for grep-ability.
+func dispatchTrackCommand(t *telemetry.Client, top, sub string) {
+	if t == nil {
+		return
+	}
+	switch top {
+	case "doctor":
+		t.TrackCliCommandDoctor(sub)
+	case "enrich":
+		t.TrackCliCommandEnrich(sub)
+	case "experiment":
+		t.TrackCliCommandExperiment(sub)
+	case "hypotheses":
+		t.TrackCliCommandHypotheses(sub)
+	case "init":
+		t.TrackCliCommandInit(sub)
+	case "knowledge":
+		t.TrackCliCommandKnowledge(sub)
+	case "login":
+		t.TrackCliCommandLogin(sub)
+	case "logout":
+		t.TrackCliCommandLogout(sub)
+	case "personas":
+		t.TrackCliCommandPersonas(sub)
+	case "products":
+		t.TrackCliCommandProducts(sub)
+	case "replay":
+		t.TrackCliCommandReplay(sub)
+	case "skill":
+		t.TrackCliCommandSkill(sub)
+	case "synthesize":
+		t.TrackCliCommandSynthesize(sub)
+	case "telemetry":
+		t.TrackCliCommandTelemetry(sub)
+	case "timeline":
+		t.TrackCliCommandTimeline(sub)
+	case "whoami":
+		t.TrackCliCommandWhoami(sub)
+	default:
+		t.TrackCliCommandRoot(top)
+	}
 }
 
 func envOr(name, fallback string) string {

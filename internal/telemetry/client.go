@@ -336,31 +336,51 @@ func (c *Client) baseProperties() map[string]any {
 	return props
 }
 
-// TrackCommand records the start of a CLI command invocation. Pair
-// each call with TrackCommandComplete on the same invocation; the
-// pair is joined server-side via invocation_id from baseProperties.
-func (c *Client) TrackCommand(name string) {
-	if c == nil || !c.Enabled() || name == "" {
+// trackCommand is the unexported worker for the typed
+// TrackCliCommand{X} methods in commands.go. External callers must go
+// through one of those methods so the set of trackable commands is
+// fixed at compile time.
+func (c *Client) trackCommand(command, subcommand string) {
+	if c == nil || !c.Enabled() || command == "" {
 		return
 	}
-	c.capture(EventCommandStarted, map[string]any{
-		"command": name,
-	})
+	props := map[string]any{
+		"command": command,
+	}
+	if subcommand != "" {
+		props["subcommand"] = subcommand
+		props["full_path"] = command + " " + subcommand
+	} else {
+		props["full_path"] = command
+	}
+	c.capture(EventCommandStarted, props)
 }
 
 // TrackCommandComplete records the outcome of a CLI command. Safe to
 // call with err == nil for the success path. The raw err.Error() is
 // classified into a small enum + fixed-vocabulary fields; nothing
 // pulled from err.Error() crosses the wire as a free-form string.
-func (c *Client) TrackCommandComplete(name string, duration time.Duration, err error) {
-	if c == nil || !c.Enabled() || name == "" {
+//
+// `command` and `subcommand` must come from the same TrackCliCommand{X}
+// pair that fired the started event; pass them through from the
+// invocation to keep the started/completed events joinable.
+func (c *Client) TrackCommandComplete(command, subcommand string, duration time.Duration, err error) {
+	if c == nil || !c.Enabled() || command == "" {
 		return
 	}
 	info := ClassifyError(err)
+	full := command
+	if subcommand != "" {
+		full = command + " " + subcommand
+	}
 	props := map[string]any{
-		"command":         name,
+		"command":         command,
+		"full_path":       full,
 		"duration_bucket": string(BucketDuration(duration)),
 		"outcome":         string(info.Outcome),
+	}
+	if subcommand != "" {
+		props["subcommand"] = subcommand
 	}
 	if info.Status != 0 {
 		props["error_status"] = info.Status

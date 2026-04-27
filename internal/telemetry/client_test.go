@@ -41,7 +41,7 @@ func TestNewClient_LogModeWritesAndDoesNotSend(t *testing.T) {
 	if c.Mode() != "log" {
 		t.Errorf("Mode = %q, want log", c.Mode())
 	}
-	c.TrackCommand("products list")
+	c.TrackCliCommandProducts("list")
 
 	if !strings.Contains(buf.String(), "[telemetry]") {
 		t.Errorf("log output missing prefix: %q", buf.String())
@@ -49,8 +49,11 @@ func TestNewClient_LogModeWritesAndDoesNotSend(t *testing.T) {
 	if !strings.Contains(buf.String(), `"event":"`+EventCommandStarted+`"`) {
 		t.Errorf("log output missing event name: %q", buf.String())
 	}
-	if !strings.Contains(buf.String(), `"command":"products list"`) {
+	if !strings.Contains(buf.String(), `"command":"products"`) {
 		t.Errorf("log output missing command property: %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), `"subcommand":"list"`) {
+		t.Errorf("log output missing subcommand property: %q", buf.String())
 	}
 }
 
@@ -63,7 +66,7 @@ func TestNewClient_OffDoesNotEmit(t *testing.T) {
 	c := NewClient(Options{Version: "1.0.0", LogWriter: &buf})
 	defer c.Close()
 
-	c.TrackCommand("must_not_log")
+	c.TrackCliCommandWhoami("")
 	if buf.Len() != 0 {
 		t.Errorf("off mode wrote: %q", buf.String())
 	}

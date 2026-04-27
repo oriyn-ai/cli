@@ -22,22 +22,44 @@ func newLogClient(t *testing.T) (*Client, *bytes.Buffer) {
 	return c, &buf
 }
 
-func TestTrackCommand_EmitsStartedEvent(t *testing.T) {
+func TestTrackCliCommand_EmitsStartedEventWithSubcommand(t *testing.T) {
 	c, buf := newLogClient(t)
-	c.TrackCommand("products list")
+	c.TrackCliCommandProducts("list")
 
 	out := buf.String()
 	if !strings.Contains(out, `"event":"`+EventCommandStarted+`"`) {
 		t.Errorf("missing started event: %q", out)
 	}
-	if !strings.Contains(out, `"command":"products list"`) {
+	if !strings.Contains(out, `"command":"products"`) {
 		t.Errorf("missing command property: %q", out)
+	}
+	if !strings.Contains(out, `"subcommand":"list"`) {
+		t.Errorf("missing subcommand property: %q", out)
+	}
+	if !strings.Contains(out, `"full_path":"products list"`) {
+		t.Errorf("missing full_path property: %q", out)
+	}
+}
+
+func TestTrackCliCommand_OmitsSubcommandWhenEmpty(t *testing.T) {
+	c, buf := newLogClient(t)
+	c.TrackCliCommandWhoami("")
+
+	out := buf.String()
+	if !strings.Contains(out, `"command":"whoami"`) {
+		t.Errorf("missing command: %q", out)
+	}
+	if strings.Contains(out, `"subcommand":`) {
+		t.Errorf("subcommand should be omitted, got %q", out)
+	}
+	if !strings.Contains(out, `"full_path":"whoami"`) {
+		t.Errorf("full_path should equal command: %q", out)
 	}
 }
 
 func TestTrackCommandComplete_SuccessShape(t *testing.T) {
 	c, buf := newLogClient(t)
-	c.TrackCommandComplete("login", 250*time.Millisecond, nil)
+	c.TrackCommandComplete("login", "", 250*time.Millisecond, nil)
 
 	out := buf.String()
 	if !strings.Contains(out, `"event":"`+EventCommandCompleted+`"`) {
@@ -65,7 +87,7 @@ func TestTrackCommandComplete_APIErrorEnrichesPayload(t *testing.T) {
 		Plan:            "starter",
 		CreditsRequired: &credits,
 	}
-	c.TrackCommandComplete("experiments run", time.Second, apiErr)
+	c.TrackCommandComplete("experiment", "run", time.Second, apiErr)
 
 	out := buf.String()
 	if !strings.Contains(out, `"outcome":"api_error"`) {
@@ -94,7 +116,7 @@ func TestTrackCommandComplete_PermissionErrorPayload(t *testing.T) {
 		Role:               "viewer",
 		OrgID:              "org_xyz",
 	}
-	c.TrackCommandComplete("experiments run", time.Second, permErr)
+	c.TrackCommandComplete("experiment", "run", time.Second, permErr)
 
 	out := buf.String()
 	if !strings.Contains(out, `"outcome":"permission_error"`) {
@@ -116,7 +138,7 @@ func TestTrackCommandComplete_PermissionErrorPayload(t *testing.T) {
 
 func TestTrackCommandComplete_RawErrorNeverShipped(t *testing.T) {
 	c, buf := newLogClient(t)
-	c.TrackCommandComplete("doctor", 50*time.Millisecond,
+	c.TrackCommandComplete("doctor", "", 50*time.Millisecond,
 		errors.New("dial tcp /Users/shivam/private/path: connection refused"))
 
 	out := buf.String()
@@ -157,7 +179,7 @@ func TestTrackOutputCount_EmitsBucket(t *testing.T) {
 func TestAgentEnvVarSetsIsAgentProperty(t *testing.T) {
 	c, buf := newLogClient(t)
 	t.Setenv("ORIYN_AGENT", "claude-code")
-	c.TrackCommand("test_command")
+	c.TrackCliCommandWhoami("")
 
 	out := buf.String()
 	if !strings.Contains(out, `"is_agent":true`) {
