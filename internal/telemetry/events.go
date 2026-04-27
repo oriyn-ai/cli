@@ -15,7 +15,6 @@ import (
 const (
 	EventCommandStarted    = "cli_command_started"
 	EventCommandCompleted  = "cli_command_completed"
-	EventCommandError      = "cli_command_error"
 	EventLoginStateChanged = "cli_login_state_changed"
 	EventOutputCount       = "cli_output_count"
 )
@@ -184,6 +183,13 @@ func ClassifyError(err error) ErrorInfo {
 		return ErrorInfo{Outcome: OutcomeAuthError, ServerMessage: "session_expired"}
 	case strings.Contains(msg, "keychain"):
 		return ErrorInfo{Outcome: OutcomeKeychainError}
+	case strings.Contains(msg, "required flag"),
+		strings.Contains(msg, "unknown command"),
+		strings.Contains(msg, "unknown flag"),
+		strings.Contains(msg, "invalid argument"),
+		strings.Contains(msg, "accepts at most"),
+		strings.Contains(msg, "requires at least"):
+		return ErrorInfo{Outcome: OutcomeUserError, ServerMessage: "bad_invocation"}
 	case strings.Contains(msg, "canceled"), strings.Contains(msg, "context canceled"):
 		return ErrorInfo{Outcome: OutcomeCanceled}
 	case strings.Contains(msg, "timed out"), strings.Contains(msg, "timeout"):

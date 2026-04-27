@@ -20,7 +20,6 @@ func newSynthesizeCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_product_synthesized", map[string]interface{}{"product_id": productID})
 			w := cmd.OutOrStdout()
 			fmt.Fprintf(w, "Context synthesis %s: %s\n", resp.Status, productID)
 

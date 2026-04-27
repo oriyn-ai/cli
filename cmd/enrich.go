@@ -22,7 +22,6 @@ func newEnrichCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_product_enriched", map[string]interface{}{"product_id": productID})
 			w := cmd.OutOrStdout()
 			fmt.Fprintf(w, "Enrichment %s: %s\n", resp.Status, productID)
 

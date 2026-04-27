@@ -227,10 +227,11 @@ func (c *Client) Reset() {
 	c.identity.UserID = ""
 }
 
-// Capture emits a single event. Properties must already be safe for
-// transmission — the package does not redact at this layer; redaction
-// is the responsibility of the call site, which has full context.
-func (c *Client) Capture(event string, props map[string]any) {
+// capture emits a single event. Unexported on purpose: every external
+// call site must go through a typed Track* method so adding any new
+// captured dimension requires editing this file (which is code-review
+// gated). Mirrors Vercel's protected track() pattern.
+func (c *Client) capture(event string, props map[string]any) {
 	if c == nil || !c.Enabled() || event == "" {
 		return
 	}
@@ -342,7 +343,7 @@ func (c *Client) TrackCommand(name string) {
 	if c == nil || !c.Enabled() || name == "" {
 		return
 	}
-	c.Capture(EventCommandStarted, map[string]any{
+	c.capture(EventCommandStarted, map[string]any{
 		"command": name,
 	})
 }
@@ -385,7 +386,7 @@ func (c *Client) TrackCommandComplete(name string, duration time.Duration, err e
 	if info.HasOrgID {
 		props["error_has_org_id"] = true
 	}
-	c.Capture(EventCommandCompleted, props)
+	c.capture(EventCommandCompleted, props)
 }
 
 // TrackLoginState records each phase of the login funnel. Surfaces
@@ -396,7 +397,7 @@ func (c *Client) TrackLoginState(state LoginState) {
 	if c == nil || !c.Enabled() || state == "" {
 		return
 	}
-	c.Capture(EventLoginStateChanged, map[string]any{
+	c.capture(EventLoginStateChanged, map[string]any{
 		"login_state": string(state),
 	})
 }
@@ -409,9 +410,70 @@ func (c *Client) TrackOutputCount(command string, count int) {
 	if c == nil || !c.Enabled() || command == "" {
 		return
 	}
-	c.Capture(EventOutputCount, map[string]any{
+	c.capture(EventOutputCount, map[string]any{
 		"command":      command,
 		"count_bucket": string(BucketCount(count)),
+	})
+}
+
+// TrackFlag records that a boolean flag was set on a command. Mirrors
+// Vercel's trackCliFlag — captures only the flag name, never a value.
+// The flag name is part of the CLI's public API surface (visible in
+// --help) so it's safe to ship as-is.
+func (c *Client) TrackFlag(command, flag string) {
+	if c == nil || !c.Enabled() || command == "" || flag == "" {
+		return
+	}
+	c.capture("cli_flag_set", map[string]any{
+		"command": command,
+		"flag":    flag,
+	})
+}
+
+// TrackArgumentCount records that a positional or repeatable argument
+// was supplied to a command, bucketed to ZERO/ONE/FEW/MANY/HUGE.
+// Mirrors Vercel's redactedArgumentsLength: the count itself can be
+// fingerprinting for small organizations, so we bucket at the call
+// site and never ship the value.
+func (c *Client) TrackArgumentCount(command, arg string, count int) {
+	if c == nil || !c.Enabled() || command == "" || arg == "" {
+		return
+	}
+	c.capture("cli_argument_count", map[string]any{
+		"command":      command,
+		"argument":     arg,
+		"count_bucket": string(BucketCount(count)),
+	})
+}
+
+// TrackOption records that a CLI option (a string-valued flag) was
+// supplied. The value is never captured unless the caller has
+// pre-validated it against an allowlist and passes the canonical form.
+// For free-form values, pass an empty string — the option name alone
+// is the signal.
+func (c *Client) TrackOption(command, option, allowlistedValue string) {
+	if c == nil || !c.Enabled() || command == "" || option == "" {
+		return
+	}
+	props := map[string]any{
+		"command": command,
+		"option":  option,
+	}
+	if allowlistedValue != "" {
+		props["value"] = allowlistedValue
+	}
+	c.capture("cli_option_set", props)
+}
+
+// TrackPreview emits a sample event for the `oriyn telemetry preview`
+// subcommand. Used only there; gives users a representative payload
+// shape without firing real lifecycle events.
+func (c *Client) TrackPreview() {
+	if c == nil || !c.Enabled() {
+		return
+	}
+	c.capture("cli_preview", map[string]any{
+		"command": "telemetry preview",
 	})
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/getsentry/sentry-go"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/oriyn-ai/cli/internal/apiclient"
 	"github.com/oriyn-ai/cli/internal/auth"
@@ -92,7 +93,9 @@ func Execute(version, commit string) int {
 			}
 
 			app.commandStartedAt = time.Now()
-			app.Tracker.TrackCommand(commandPath(cmd))
+			cmdName := commandPath(cmd)
+			app.Tracker.TrackCommand(cmdName)
+			trackFlagsAndOptions(app.Tracker, cmd, cmdName)
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
@@ -159,6 +162,32 @@ func Execute(version, commit string) int {
 		return classifyError(err)
 	}
 	return 0
+}
+
+// trackFlagsAndOptions walks the cobra flag set and records every
+// flag that was explicitly set on this invocation. Mirrors Vercel's
+// pattern of auto-capturing all flags by name (never by value): the
+// flag name is part of the public API surface (visible in --help)
+// and so safe to ship; the value would freely contain user paths,
+// IDs, or text input and is never captured here.
+//
+// String/int/duration options are recorded via TrackOption with an
+// empty value — the option name alone is the signal.
+func trackFlagsAndOptions(t *telemetry.Client, cmd *cobra.Command, cmdName string) {
+	if t == nil || !t.Enabled() {
+		return
+	}
+	cmd.Flags().Visit(func(f *pflag.Flag) {
+		if f.Name == "" {
+			return
+		}
+		switch f.Value.Type() {
+		case "bool":
+			t.TrackFlag(cmdName, f.Name)
+		default:
+			t.TrackOption(cmdName, f.Name, "")
+		}
+	})
 }
 
 // commandPath returns the dot-joined path of the cobra command for

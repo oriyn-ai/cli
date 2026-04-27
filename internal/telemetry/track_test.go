@@ -157,7 +157,7 @@ func TestTrackOutputCount_EmitsBucket(t *testing.T) {
 func TestAgentEnvVarSetsIsAgentProperty(t *testing.T) {
 	c, buf := newLogClient(t)
 	t.Setenv("ORIYN_AGENT", "claude-code")
-	c.Capture("test", nil)
+	c.TrackCommand("test_command")
 
 	out := buf.String()
 	if !strings.Contains(out, `"is_agent":true`) {
@@ -165,5 +165,54 @@ func TestAgentEnvVarSetsIsAgentProperty(t *testing.T) {
 	}
 	if strings.Contains(out, "claude-code") {
 		t.Errorf("agent name leaked into payload: %q", out)
+	}
+}
+
+func TestTrackFlag_EmitsEvent(t *testing.T) {
+	c, buf := newLogClient(t)
+	c.TrackFlag("login", "no-browser")
+
+	out := buf.String()
+	if !strings.Contains(out, `"event":"cli_flag_set"`) {
+		t.Errorf("missing flag event: %q", out)
+	}
+	if !strings.Contains(out, `"flag":"no-browser"`) {
+		t.Errorf("missing flag name: %q", out)
+	}
+}
+
+func TestTrackOption_OmitsValueWhenEmpty(t *testing.T) {
+	c, buf := newLogClient(t)
+	c.TrackOption("knowledge search", "limit", "")
+
+	out := buf.String()
+	if !strings.Contains(out, `"option":"limit"`) {
+		t.Errorf("missing option name: %q", out)
+	}
+	if strings.Contains(out, `"value":`) {
+		t.Errorf("empty value should be omitted, got %q", out)
+	}
+}
+
+func TestTrackOption_PassesAllowlistedValue(t *testing.T) {
+	c, buf := newLogClient(t)
+	c.TrackOption("products list", "format", "json")
+
+	out := buf.String()
+	if !strings.Contains(out, `"value":"json"`) {
+		t.Errorf("allowlisted value not captured: %q", out)
+	}
+}
+
+func TestTrackArgumentCount_BucketsCount(t *testing.T) {
+	c, buf := newLogClient(t)
+	c.TrackArgumentCount("experiment list", "experiment_ids", 5)
+
+	out := buf.String()
+	if !strings.Contains(out, `"count_bucket":"few"`) {
+		t.Errorf("missing count bucket: %q", out)
+	}
+	if strings.Contains(out, `"count":5`) {
+		t.Errorf("raw count should not leak: %q", out)
 	}
 }

@@ -41,16 +41,16 @@ func TestNewClient_LogModeWritesAndDoesNotSend(t *testing.T) {
 	if c.Mode() != "log" {
 		t.Errorf("Mode = %q, want log", c.Mode())
 	}
-	c.Capture("test_event", map[string]any{"foo": "bar"})
+	c.TrackCommand("products list")
 
 	if !strings.Contains(buf.String(), "[telemetry]") {
 		t.Errorf("log output missing prefix: %q", buf.String())
 	}
-	if !strings.Contains(buf.String(), `"event":"test_event"`) {
+	if !strings.Contains(buf.String(), `"event":"`+EventCommandStarted+`"`) {
 		t.Errorf("log output missing event name: %q", buf.String())
 	}
-	if !strings.Contains(buf.String(), `"foo":"bar"`) {
-		t.Errorf("log output missing user property: %q", buf.String())
+	if !strings.Contains(buf.String(), `"command":"products list"`) {
+		t.Errorf("log output missing command property: %q", buf.String())
 	}
 }
 
@@ -63,7 +63,7 @@ func TestNewClient_OffDoesNotEmit(t *testing.T) {
 	c := NewClient(Options{Version: "1.0.0", LogWriter: &buf})
 	defer c.Close()
 
-	c.Capture("must_not_log", nil)
+	c.TrackCommand("must_not_log")
 	if buf.Len() != 0 {
 		t.Errorf("off mode wrote: %q", buf.String())
 	}
@@ -81,8 +81,8 @@ func TestNewClient_PreviewForcesLogModeEvenWhenDisabled(t *testing.T) {
 	if c.Mode() != "log" {
 		t.Errorf("preview Mode = %q, want log", c.Mode())
 	}
-	c.Capture("preview_event", nil)
-	if !strings.Contains(buf.String(), "preview_event") {
+	c.TrackPreview()
+	if !strings.Contains(buf.String(), `"event":"cli_preview"`) {
 		t.Errorf("preview should print payload, got %q", buf.String())
 	}
 }

@@ -62,7 +62,7 @@ func runProductsList(cmd *cobra.Command, app *App, jsonOutput bool) error {
 	if err != nil {
 		return err
 	}
-	app.Tracker.Capture("cli_products_listed", nil)
+	app.Tracker.TrackOutputCount("products list", len(products))
 
 	w := cmd.OutOrStdout()
 	if agentMode(cmd, jsonOutput) {
@@ -93,7 +93,6 @@ func newProductsGetCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_product_viewed", map[string]interface{}{"product_id": productID})
 
 			w := cmd.OutOrStdout()
 			if agentMode(cmd, jsonOutput) {
@@ -319,7 +318,6 @@ func newProductsScrapeCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_source_scraped", map[string]interface{}{"product_id": productID, "source_id": sourceID})
 			fmt.Fprintf(cmd.OutOrStdout(), "Scrape %s: %s\n", resp.Status, sourceID)
 			return nil
 		},
