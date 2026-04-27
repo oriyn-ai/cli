@@ -15,11 +15,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oriyn-ai/cli/internal/auth"
+	"github.com/oriyn-ai/cli/internal/telemetry"
 )
 
-// identifier is the subset of telemetry.Client we need from runLogin.
-type identifier interface {
+// loginTracker is the subset of telemetry.Client we need from runLogin.
+// Defined as an interface so tests can pass a stub.
+type loginTracker interface {
 	Identify(userID string, props map[string]any)
+	TrackLoginState(state telemetry.LoginState)
 }
 
 type callbackResult struct {
@@ -39,16 +42,16 @@ func newLoginCmd(app *App) *cobra.Command {
 			"For non-interactive CI/agent environments, set ORIYN_ACCESS_TOKEN " +
 			"instead of running `oriyn login`.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := runLogin(cmd.Context(), app.WebBase, app.APIBase, app.AuthStore, app.Tracker, noBrowser, cmd.OutOrStdout())
-			app.Tracker.Capture("cli_login", map[string]any{"success": err == nil})
-			return err
+			return runLogin(cmd.Context(), app.WebBase, app.APIBase, app.AuthStore, app.Tracker, noBrowser, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Print the login URL instead of trying to open a browser")
 	return cmd
 }
 
-func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Store, ident identifier, noBrowser bool, w io.Writer) error {
+func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Store, tracker loginTracker, noBrowser bool, w io.Writer) error {
+	trackState(tracker, telemetry.LoginStateStarted)
+
 	stateParam := uuid.NewString()
 	callbackCh := make(chan callbackResult, 1)
 
@@ -57,6 +60,7 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
+		trackState(tracker, telemetry.LoginStateFailed)
 		return fmt.Errorf("binding local server: %w", err)
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
@@ -73,24 +77,29 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 		fmt.Fprintf(w, "Could not open a browser. Open this URL manually:\n\n  %s\n\n", loginURL)
 	} else {
 		fmt.Fprintln(w, "Opening browser to log in...")
+		trackState(tracker, telemetry.LoginStateBrowserOpened)
 	}
+	trackState(tracker, telemetry.LoginStateAwaitingCallback)
 	fmt.Fprintln(w, "Waiting for authentication...")
 
 	select {
 	case cb := <-callbackCh:
+		trackState(tracker, telemetry.LoginStateCallbackReceived)
 		creds := &auth.Credentials{
 			AccessToken:  cb.accessToken,
 			RefreshToken: cb.refreshToken,
 			ExpiresAt:    time.Now().Unix() + cb.expiresIn,
 		}
 		if err := authStore.Save(creds); err != nil {
+			trackState(tracker, telemetry.LoginStateFailed)
 			return err
 		}
 
 		me, err := fetchMe(ctx, apiBase, creds.AccessToken)
 		if err == nil {
-			if me.userID != "" && ident != nil {
-				ident.Identify(me.userID, nil)
+			trackState(tracker, telemetry.LoginStateProfileFetched)
+			if me.userID != "" && tracker != nil {
+				tracker.Identify(me.userID, nil)
 			}
 			if me.email != "" {
 				fmt.Fprintf(w, "Logged in as %s\n", me.email)
@@ -101,11 +110,20 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 			fmt.Fprintln(w, "Logged in successfully.")
 		}
 
+		trackState(tracker, telemetry.LoginStateSucceeded)
 		return nil
 	case <-time.After(120 * time.Second):
+		trackState(tracker, telemetry.LoginStateTimedOut)
 		return fmt.Errorf("login timed out after 120 seconds — please try again")
 	case <-ctx.Done():
+		trackState(tracker, telemetry.LoginStateCanceled)
 		return ctx.Err()
+	}
+}
+
+func trackState(t loginTracker, state telemetry.LoginState) {
+	if t != nil {
+		t.TrackLoginState(state)
 	}
 }
 

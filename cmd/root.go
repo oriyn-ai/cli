@@ -23,6 +23,12 @@ type App struct {
 	Tracker   *telemetry.Client
 	APIBase   string
 	WebBase   string
+
+	// commandStartedAt is set by PersistentPreRunE so the error and
+	// success paths can both compute a duration without a per-command
+	// timer. cobra's PostRunE only fires on success, so we can't rely
+	// on a defer there.
+	commandStartedAt time.Time
 }
 
 // Execute runs the root command and returns a process exit code.
@@ -85,10 +91,17 @@ func Execute(version, commit string) int {
 				})
 			}
 
+			app.commandStartedAt = time.Now()
+			app.Tracker.TrackCommand(commandPath(cmd))
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
 			if app.Tracker != nil {
+				app.Tracker.TrackCommandComplete(
+					commandPath(cmd),
+					time.Since(app.commandStartedAt),
+					nil,
+				)
 				app.Tracker.Close()
 			}
 			// Sentry.Flush is a no-op when the client wasn't init'd,
@@ -124,15 +137,19 @@ func Execute(version, commit string) int {
 	)
 
 	if err := rootCmd.Execute(); err != nil {
-		cmdName := ""
-		if rootCmd.CalledAs() != "" {
-			cmdName = rootCmd.CalledAs()
+		// CalledAs is empty on errors at the root (e.g. unknown
+		// subcommand); fall back to "root" so dashboards still group.
+		cmdPath := rootCmd.CalledAs()
+		if cmdPath == "" {
+			cmdPath = "root"
 		}
 		if app.Tracker != nil {
-			app.Tracker.Capture("cli_error", map[string]any{
-				"command":    cmdName,
-				"error_kind": classifyErrorKind(err),
-			})
+			app.Tracker.TrackCommandComplete(
+				cmdPath,
+				time.Since(app.commandStartedAt),
+				err,
+			)
+			app.Tracker.Close()
 		}
 		if isInfraError(err) {
 			sentry.CaptureException(err)
@@ -142,6 +159,27 @@ func Execute(version, commit string) int {
 		return classifyError(err)
 	}
 	return 0
+}
+
+// commandPath returns the dot-joined path of the cobra command for
+// telemetry, e.g. "products list" rather than just "list". Stable
+// across releases, since each verb is renamed at most once.
+func commandPath(cmd *cobra.Command) string {
+	if cmd == nil {
+		return "root"
+	}
+	parts := []string{}
+	for c := cmd; c != nil && c.Name() != ""; c = c.Parent() {
+		// Skip the root binary name to keep the value short.
+		if c.Parent() == nil {
+			break
+		}
+		parts = append([]string{c.Name()}, parts...)
+	}
+	if len(parts) == 0 {
+		return "root"
+	}
+	return strings.Join(parts, " ")
 }
 
 func envOr(name, fallback string) string {
@@ -200,30 +238,4 @@ func isInfraError(err error) bool {
 	return strings.Contains(msg, "failed to access OS keychain") ||
 		strings.Contains(msg, "failed to store credentials in OS keychain") ||
 		strings.Contains(msg, "failed to parse stored credentials")
-}
-
-// classifyErrorKind buckets errors into a small allowlist for telemetry.
-// We never send the raw err.Error(): user-facing error strings often
-// contain paths, URLs, or argument values that we promised never to ship.
-func classifyErrorKind(err error) string {
-	if err == nil {
-		return "none"
-	}
-	msg := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(msg, "not logged in"):
-		return "auth_missing"
-	case strings.Contains(msg, "session expired"):
-		return "auth_expired"
-	case strings.Contains(msg, "keychain"):
-		return "keychain"
-	case strings.Contains(msg, "timed out"), strings.Contains(msg, "timeout"):
-		return "timeout"
-	case strings.Contains(msg, "connection refused"), strings.Contains(msg, "no such host"):
-		return "network"
-	case strings.Contains(msg, "api returned"):
-		return "api_status"
-	default:
-		return "unknown"
-	}
 }
