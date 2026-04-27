@@ -66,11 +66,14 @@ func detectCI() (string, bool) {
 
 // CIAutoSkip reports whether the current invocation should skip telemetry
 // because it's running under CI without an explicit override. Power users
-// who want CI capture can set ORIYN_TELEMETRY=1.
+// who want CI capture can set ORIYN_TELEMETRY=1; debug previewing via
+// ORIYN_TELEMETRY=log also overrides the auto-skip, since asking to see
+// the payload is itself an explicit signal.
 func (d EnvDecision) CIAutoSkip() bool {
 	if !d.IsCI {
 		return false
 	}
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("ORIYN_TELEMETRY")))
-	return v != "1" && v != "true" && v != "on" && v != "enabled"
+	return v != "1" && v != "true" && v != "on" && v != "enabled" &&
+		v != "log" && v != "debug"
 }

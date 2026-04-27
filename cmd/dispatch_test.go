@@ -10,12 +10,28 @@ import (
 	"github.com/oriyn-ai/cli/internal/telemetry"
 )
 
+// scrubCIEnv clears every env var that could push the telemetry
+// client into CI auto-skip mode, so dispatch tests are deterministic
+// regardless of whether they run locally or in GitHub Actions.
+func scrubCIEnv(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{
+		"DO_NOT_TRACK",
+		"CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI", "BUILDKITE",
+		"TF_BUILD", "TEAMCITY_VERSION", "JENKINS_URL",
+		"BITBUCKET_BUILD_NUMBER", "DRONE", "VERCEL", "NETLIFY",
+	} {
+		t.Setenv(k, "")
+	}
+}
+
 // TestDispatchTrackCommand_AllCobraCommandsHaveCases is the safety net
 // for the typed-allowlist hierarchy: every top-level cobra command
 // registered in Execute() must have a matching case in
 // dispatchTrackCommand. A new command without a case falls through to
 // TrackCliCommandRoot, which this test detects.
 func TestDispatchTrackCommand_AllCobraCommandsHaveCases(t *testing.T) {
+	scrubCIEnv(t)
 	t.Setenv("ORIYN_TELEMETRY", "log")
 	t.Setenv("ORIYN_CONFIG_DIR", t.TempDir())
 
@@ -54,6 +70,7 @@ func TestDispatchTrackCommand_AllCobraCommandsHaveCases(t *testing.T) {
 }
 
 func TestDispatchTrackCommand_UnknownFallsBackToRoot(t *testing.T) {
+	scrubCIEnv(t)
 	t.Setenv("ORIYN_TELEMETRY", "log")
 	t.Setenv("ORIYN_CONFIG_DIR", t.TempDir())
 
