@@ -40,9 +40,11 @@ type Keyring interface {
 
 type defaultKeyring struct{}
 
-func (defaultKeyring) Get(service, user string) (string, error)            { return keyring.Get(service, user) }
-func (defaultKeyring) Set(service, user, password string) error            { return keyring.Set(service, user, password) }
-func (defaultKeyring) Delete(service, user string) error                   { return keyring.Delete(service, user) }
+func (defaultKeyring) Get(service, user string) (string, error) { return keyring.Get(service, user) }
+func (defaultKeyring) Set(service, user, password string) error {
+	return keyring.Set(service, user, password)
+}
+func (defaultKeyring) Delete(service, user string) error { return keyring.Delete(service, user) }
 
 type Store struct {
 	keyring Keyring
@@ -70,6 +72,8 @@ func (s *Store) Load() (*Credentials, error) {
 }
 
 func (s *Store) Save(creds *Credentials) error {
+	// Marshaling tokens for OS keyring storage — by design.
+	//nolint:gosec // G117: intentional secret marshaling; destination is the OS keyring.
 	data, err := json.Marshal(creds)
 	if err != nil {
 		return fmt.Errorf("failed to serialize credentials: %w", err)
@@ -128,6 +132,8 @@ type refreshResponse struct {
 }
 
 func (s *Store) refreshToken(ctx context.Context, token string) (*Credentials, error) {
+	// Marshaling refresh token into a request body sent to oriyn-api.
+	//nolint:gosec // G117: intentional; destination is the API over TLS.
 	body, err := json.Marshal(refreshRequest{RefreshToken: token})
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode refresh request: %w", err)

@@ -86,10 +86,6 @@ func readHypothesis(cmd *cobra.Command, flagValue string, fromStdin bool) (strin
 	return flagValue, nil
 }
 
-func joinStrings(ss []string, sep string) string {
-	return strings.Join(ss, sep)
-}
-
 func truncate(s string, maxLen int) string {
 	runes := []rune(s)
 	if len(runes) <= maxLen {

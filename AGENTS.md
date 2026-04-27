@@ -3,10 +3,14 @@ Oriyn helps product teams understand user behavior, generate hypotheses, and run
 </product>
 
 <workflow>
-- `go build ./...` - build
-- `go test ./...` - run tests
-- `go vet ./...` - lint
-- `go install ./...` - install locally for manual testing
+- `make build` (or `go build ./...`) - build
+- `make test` - run tests with race detector
+- `make vet` - run `go vet`
+- `make fmt` - format with `gofmt -s` + `goimports` (local prefix grouping)
+- `make fmt-check` - verify formatting without writing
+- `make lint` - run `golangci-lint` (config in `.golangci.yml`)
+- `make tools` - install local dev tooling (`goimports`, `golangci-lint`)
+- `make install` - install binary locally for manual testing
 </workflow>
 
 <rules>

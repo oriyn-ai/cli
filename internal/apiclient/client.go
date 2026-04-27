@@ -24,7 +24,7 @@ const apiVersion = "/v1"
 
 func New(apiBase string, auth AuthProvider) *Client {
 	r := resty.New().
-		SetBaseURL(apiBase + apiVersion).
+		SetBaseURL(apiBase+apiVersion).
 		SetHeader("Content-Type", "application/json").
 		OnBeforeRequest(func(_ *resty.Client, req *resty.Request) error {
 			token, err := auth.GetValidAccessToken(req.Context())

@@ -28,6 +28,16 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      - name: format check
+        run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+          make fmt-check
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
       - name: go test
         run: go test -race -count=1 ./...
 
