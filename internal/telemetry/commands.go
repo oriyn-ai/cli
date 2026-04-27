@@ -26,6 +26,11 @@ func (c *Client) TrackCliCommandLogout(subcommand string) {
 	c.trackCommand("logout", subcommand)
 }
 
+// TrackCliCommandUninstall records an `oriyn uninstall` invocation.
+func (c *Client) TrackCliCommandUninstall(subcommand string) {
+	c.trackCommand("uninstall", subcommand)
+}
+
 // TrackCliCommandWhoami records an `oriyn whoami` invocation.
 func (c *Client) TrackCliCommandWhoami(subcommand string) {
 	c.trackCommand("whoami", subcommand)

@@ -41,7 +41,7 @@ func TestDispatchTrackCommand_AllCobraCommandsHaveCases(t *testing.T) {
 		"init", "login", "logout", "whoami", "doctor", "skill",
 		"products", "personas", "hypotheses", "knowledge",
 		"timeline", "replay", "synthesize", "enrich",
-		"experiment", "telemetry",
+		"experiment", "telemetry", "uninstall",
 	}
 
 	for _, top := range knownCommands {
