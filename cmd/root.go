@@ -20,7 +20,7 @@ const sentryDSN = "https://7a9c0f680579c791f90ecee37a16375f@o4510953905651712.in
 type App struct {
 	AuthStore *auth.Store
 	API       *apiclient.Client
-	Tracker   *telemetry.Tracker
+	Tracker   *telemetry.Client
 	APIBase   string
 	WebBase   string
 }
@@ -38,23 +38,33 @@ func Execute(version, commit string) int {
 			if version == "dev" {
 				env = "development"
 			}
-			if err := sentry.Init(sentry.ClientOptions{
-				Dsn:            sentryDSN,
-				Release:        version,
-				Environment:    env,
-				SendDefaultPII: false,
-				BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
-					return scrubEvent(event)
-				},
-			}); err != nil {
-				_ = err
+			cfg, _ := telemetry.LoadConfig()
+			envDecision := telemetry.ReadEnv()
+
+			// Sentry is bundled under the same consent switch as
+			// PostHog: one telemetry off means both stay quiet.
+			sentryEnabled := version != "" && version != "dev" &&
+				!envDecision.ExplicitlyDisabled &&
+				!envDecision.CIAutoSkip() &&
+				(cfg.Enabled == nil || *cfg.Enabled)
+
+			if sentryEnabled {
+				if err := sentry.Init(sentry.ClientOptions{
+					Dsn:            sentryDSN,
+					Release:        version,
+					Environment:    env,
+					SendDefaultPII: false,
+					BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
+						return scrubEvent(event)
+					},
+				}); err != nil {
+					_ = err
+				}
 			}
 
-			if uid := telemetry.GetUserID(); uid != "" {
-				sentry.ConfigureScope(func(scope *sentry.Scope) {
-					scope.SetUser(sentry.User{ID: uid})
-				})
-			}
+			// First-run disclosure: prints once, persists decision,
+			// silent under env opt-out / CI / non-TTY.
+			telemetry.CheckDisclosure(cfg, envDecision, cmd.ErrOrStderr())
 
 			if quiet, _ := cmd.Root().PersistentFlags().GetBool("quiet"); quiet {
 				color.NoColor = true
@@ -67,7 +77,13 @@ func Execute(version, commit string) int {
 			app.APIBase, _ = cmd.Flags().GetString("api-base")
 			app.WebBase, _ = cmd.Flags().GetString("web-base")
 			app.API = apiclient.New(app.APIBase, app.AuthStore)
-			app.Tracker = telemetry.NewTracker(version)
+			app.Tracker = telemetry.NewClient(telemetry.Options{Version: version})
+
+			if uid := app.Tracker.IdentitySnapshot().UserID; uid != "" && sentryEnabled {
+				sentry.ConfigureScope(func(scope *sentry.Scope) {
+					scope.SetUser(sentry.User{ID: uid})
+				})
+			}
 
 			return nil
 		},
@@ -75,6 +91,8 @@ func Execute(version, commit string) int {
 			if app.Tracker != nil {
 				app.Tracker.Close()
 			}
+			// Sentry.Flush is a no-op when the client wasn't init'd,
+			// so this is safe to call unconditionally.
 			sentry.Flush(2 * time.Second)
 			return nil
 		},
@@ -111,9 +129,9 @@ func Execute(version, commit string) int {
 			cmdName = rootCmd.CalledAs()
 		}
 		if app.Tracker != nil {
-			app.Tracker.Capture("cli_error", map[string]interface{}{
+			app.Tracker.Capture("cli_error", map[string]any{
 				"command":    cmdName,
-				"error_type": err.Error(),
+				"error_kind": classifyErrorKind(err),
 			})
 		}
 		if isInfraError(err) {
@@ -182,4 +200,30 @@ func isInfraError(err error) bool {
 	return strings.Contains(msg, "failed to access OS keychain") ||
 		strings.Contains(msg, "failed to store credentials in OS keychain") ||
 		strings.Contains(msg, "failed to parse stored credentials")
+}
+
+// classifyErrorKind buckets errors into a small allowlist for telemetry.
+// We never send the raw err.Error(): user-facing error strings often
+// contain paths, URLs, or argument values that we promised never to ship.
+func classifyErrorKind(err error) string {
+	if err == nil {
+		return "none"
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "not logged in"):
+		return "auth_missing"
+	case strings.Contains(msg, "session expired"):
+		return "auth_expired"
+	case strings.Contains(msg, "keychain"):
+		return "keychain"
+	case strings.Contains(msg, "timed out"), strings.Contains(msg, "timeout"):
+		return "timeout"
+	case strings.Contains(msg, "connection refused"), strings.Contains(msg, "no such host"):
+		return "network"
+	case strings.Contains(msg, "api returned"):
+		return "api_status"
+	default:
+		return "unknown"
+	}
 }

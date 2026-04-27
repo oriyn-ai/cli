@@ -15,8 +15,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oriyn-ai/cli/internal/auth"
-	"github.com/oriyn-ai/cli/internal/telemetry"
 )
+
+// identifier is the subset of telemetry.Client we need from runLogin.
+type identifier interface {
+	Identify(userID string, props map[string]any)
+}
 
 type callbackResult struct {
 	accessToken  string
@@ -35,8 +39,8 @@ func newLoginCmd(app *App) *cobra.Command {
 			"For non-interactive CI/agent environments, set ORIYN_ACCESS_TOKEN " +
 			"instead of running `oriyn login`.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := runLogin(cmd.Context(), app.WebBase, app.APIBase, app.AuthStore, noBrowser, cmd.OutOrStdout())
-			app.Tracker.Capture("cli_login", map[string]interface{}{"success": err == nil})
+			err := runLogin(cmd.Context(), app.WebBase, app.APIBase, app.AuthStore, app.Tracker, noBrowser, cmd.OutOrStdout())
+			app.Tracker.Capture("cli_login", map[string]any{"success": err == nil})
 			return err
 		},
 	}
@@ -44,7 +48,7 @@ func newLoginCmd(app *App) *cobra.Command {
 	return cmd
 }
 
-func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Store, noBrowser bool, w io.Writer) error {
+func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Store, ident identifier, noBrowser bool, w io.Writer) error {
 	stateParam := uuid.NewString()
 	callbackCh := make(chan callbackResult, 1)
 
@@ -85,8 +89,8 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 
 		me, err := fetchMe(ctx, apiBase, creds.AccessToken)
 		if err == nil {
-			if me.userID != "" {
-				telemetry.StoreUserID(me.userID)
+			if me.userID != "" && ident != nil {
+				ident.Identify(me.userID, nil)
 			}
 			if me.email != "" {
 				fmt.Fprintf(w, "Logged in as %s\n", me.email)
