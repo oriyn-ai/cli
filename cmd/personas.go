@@ -18,7 +18,7 @@ func newPersonasCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_personas_viewed", map[string]interface{}{"product_id": productID})
+			app.Tracker.TrackOutputCount("personas", len(resp.Data))
 
 			w := cmd.OutOrStdout()
 			if agentMode(cmd, jsonOutput) {

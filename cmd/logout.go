@@ -14,7 +14,6 @@ func newLogoutCmd(app *App) *cobra.Command {
 			if err := app.AuthStore.Delete(); err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_logout", nil)
 			app.Tracker.Reset()
 			fmt.Fprintln(cmd.OutOrStdout(), "Logged out.")
 			return nil

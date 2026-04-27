@@ -19,7 +19,7 @@ func newHypothesesCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_hypotheses_viewed", map[string]interface{}{"product_id": productID})
+			app.Tracker.TrackOutputCount("hypotheses", len(resp.Data))
 
 			w := cmd.OutOrStdout()
 			if agentMode(cmd, jsonOutput) {
@@ -60,7 +60,6 @@ func newHypothesesRefreshCmd(app *App, productID *string, jsonOutput *bool) *cob
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_hypotheses_refresh_triggered", map[string]interface{}{"product_id": *productID})
 
 			w := cmd.OutOrStdout()
 			if agentMode(cmd, *jsonOutput) {
@@ -82,7 +81,7 @@ func newBottlenecksCmd(app *App, productID *string, jsonOutput *bool) *cobra.Com
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_bottlenecks_viewed", map[string]interface{}{"product_id": *productID})
+			app.Tracker.TrackOutputCount("bottlenecks", len(resp.Data))
 
 			w := cmd.OutOrStdout()
 			if agentMode(cmd, *jsonOutput) {

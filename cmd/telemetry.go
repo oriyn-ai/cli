@@ -119,10 +119,7 @@ func newTelemetryPreviewCmd(version string) *cobra.Command {
 				LogWriter: cmd.ErrOrStderr(),
 			})
 			defer client.Close()
-			client.Capture("cli_preview", map[string]any{
-				"command": "telemetry preview",
-				"success": true,
-			})
+			client.TrackPreview()
 			return nil
 		},
 	}

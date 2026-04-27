@@ -13,6 +13,7 @@
 package telemetry
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -226,10 +227,11 @@ func (c *Client) Reset() {
 	c.identity.UserID = ""
 }
 
-// Capture emits a single event. Properties must already be safe for
-// transmission — the package does not redact at this layer; redaction
-// is the responsibility of the call site, which has full context.
-func (c *Client) Capture(event string, props map[string]any) {
+// capture emits a single event. Unexported on purpose: every external
+// call site must go through a typed Track* method so adding any new
+// captured dimension requires editing this file (which is code-review
+// gated). Mirrors Vercel's protected track() pattern.
+func (c *Client) capture(event string, props map[string]any) {
 	if c == nil || !c.Enabled() || event == "" {
 		return
 	}
@@ -317,7 +319,7 @@ func (c *Client) Mode() string {
 // baseProperties are attached to every captured event. Keep this list
 // in lockstep with the transparency page.
 func (c *Client) baseProperties() map[string]any {
-	return map[string]any{
+	props := map[string]any{
 		"$lib":          "oriyn-cli",
 		"cli_version":   c.version,
 		"os":            runtime.GOOS,
@@ -326,6 +328,173 @@ func (c *Client) baseProperties() map[string]any {
 		"session_id":    c.identity.SessionID,
 		"invocation_id": c.identity.InvocationID,
 	}
+	if agent := os.Getenv("ORIYN_AGENT"); agent != "" {
+		// Captured as boolean to avoid the agent string itself being
+		// a fingerprintable identifier of the user's setup.
+		props["is_agent"] = true
+	}
+	return props
+}
+
+// trackCommand is the unexported worker for the typed
+// TrackCliCommand{X} methods in commands.go. External callers must go
+// through one of those methods so the set of trackable commands is
+// fixed at compile time.
+func (c *Client) trackCommand(command, subcommand string) {
+	if c == nil || !c.Enabled() || command == "" {
+		return
+	}
+	props := map[string]any{
+		"command": command,
+	}
+	if subcommand != "" {
+		props["subcommand"] = subcommand
+		props["full_path"] = command + " " + subcommand
+	} else {
+		props["full_path"] = command
+	}
+	c.capture(EventCommandStarted, props)
+}
+
+// TrackCommandComplete records the outcome of a CLI command. Safe to
+// call with err == nil for the success path. The raw err.Error() is
+// classified into a small enum + fixed-vocabulary fields; nothing
+// pulled from err.Error() crosses the wire as a free-form string.
+//
+// `command` and `subcommand` must come from the same TrackCliCommand{X}
+// pair that fired the started event; pass them through from the
+// invocation to keep the started/completed events joinable.
+func (c *Client) TrackCommandComplete(command, subcommand string, duration time.Duration, err error) {
+	if c == nil || !c.Enabled() || command == "" {
+		return
+	}
+	info := ClassifyError(err)
+	full := command
+	if subcommand != "" {
+		full = command + " " + subcommand
+	}
+	props := map[string]any{
+		"command":         command,
+		"full_path":       full,
+		"duration_bucket": string(BucketDuration(duration)),
+		"outcome":         string(info.Outcome),
+	}
+	if subcommand != "" {
+		props["subcommand"] = subcommand
+	}
+	if info.Status != 0 {
+		props["error_status"] = info.Status
+	}
+	if info.ServerMessage != "" {
+		props["error_server_message"] = info.ServerMessage
+	}
+	if info.Plan != "" {
+		props["error_plan"] = info.Plan
+	}
+	if info.HasCreditsRequired {
+		props["error_has_credits_required"] = true
+	}
+	if info.HasMaxAgentCount {
+		props["error_has_max_agent_count"] = true
+	}
+	if info.RequiredPermission != "" {
+		props["error_required_permission"] = info.RequiredPermission
+	}
+	if info.Role != "" {
+		props["error_role"] = info.Role
+	}
+	if info.HasOrgID {
+		props["error_has_org_id"] = true
+	}
+	c.capture(EventCommandCompleted, props)
+}
+
+// TrackLoginState records each phase of the login funnel. Surfaces
+// drop-off points: e.g. "browser_opened" → no "callback_received"
+// means a browser-side failure; "callback_received" → no
+// "profile_fetched" means an oriyn-api failure.
+func (c *Client) TrackLoginState(state LoginState) {
+	if c == nil || !c.Enabled() || state == "" {
+		return
+	}
+	c.capture(EventLoginStateChanged, map[string]any{
+		"login_state": string(state),
+	})
+}
+
+// TrackOutputCount records the size of a list-shape command's result
+// set, bucketed to avoid leaking exact counts (which can be PII for
+// small organizations: "this org has 1 product"). Optional — call
+// from list commands only.
+func (c *Client) TrackOutputCount(command string, count int) {
+	if c == nil || !c.Enabled() || command == "" {
+		return
+	}
+	c.capture(EventOutputCount, map[string]any{
+		"command":      command,
+		"count_bucket": string(BucketCount(count)),
+	})
+}
+
+// TrackFlag records that a boolean flag was set on a command. Mirrors
+// Vercel's trackCliFlag — captures only the flag name, never a value.
+// The flag name is part of the CLI's public API surface (visible in
+// --help) so it's safe to ship as-is.
+func (c *Client) TrackFlag(command, flag string) {
+	if c == nil || !c.Enabled() || command == "" || flag == "" {
+		return
+	}
+	c.capture("cli_flag_set", map[string]any{
+		"command": command,
+		"flag":    flag,
+	})
+}
+
+// TrackArgumentCount records that a positional or repeatable argument
+// was supplied to a command, bucketed to ZERO/ONE/FEW/MANY/HUGE.
+// Mirrors Vercel's redactedArgumentsLength: the count itself can be
+// fingerprinting for small organizations, so we bucket at the call
+// site and never ship the value.
+func (c *Client) TrackArgumentCount(command, arg string, count int) {
+	if c == nil || !c.Enabled() || command == "" || arg == "" {
+		return
+	}
+	c.capture("cli_argument_count", map[string]any{
+		"command":      command,
+		"argument":     arg,
+		"count_bucket": string(BucketCount(count)),
+	})
+}
+
+// TrackOption records that a CLI option (a string-valued flag) was
+// supplied. The value is never captured unless the caller has
+// pre-validated it against an allowlist and passes the canonical form.
+// For free-form values, pass an empty string — the option name alone
+// is the signal.
+func (c *Client) TrackOption(command, option, allowlistedValue string) {
+	if c == nil || !c.Enabled() || command == "" || option == "" {
+		return
+	}
+	props := map[string]any{
+		"command": command,
+		"option":  option,
+	}
+	if allowlistedValue != "" {
+		props["value"] = allowlistedValue
+	}
+	c.capture("cli_option_set", props)
+}
+
+// TrackPreview emits a sample event for the `oriyn telemetry preview`
+// subcommand. Used only there; gives users a representative payload
+// shape without firing real lifecycle events.
+func (c *Client) TrackPreview() {
+	if c == nil || !c.Enabled() {
+		return
+	}
+	c.capture("cli_preview", map[string]any{
+		"command": "telemetry preview",
+	})
 }
 
 // Store buffers events for log mode so a single test or `oriyn
@@ -349,9 +518,16 @@ func (s *Store) log(event map[string]any) {
 
 	event["_n"] = strconv.Itoa(s.count)
 	s.count++
-	data, err := json.Marshal(event)
-	if err != nil {
+
+	// Disable HTML escaping so duration_bucket values like "<500ms"
+	// render as themselves, not "<500ms" — readable in stderr
+	// and easier to grep over in tests.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(event); err != nil {
 		return
 	}
-	fmt.Fprintln(s.out, "[telemetry] "+string(data))
+	// Encoder appends a newline; Fprint preserves it.
+	fmt.Fprint(s.out, "[telemetry] "+buf.String())
 }

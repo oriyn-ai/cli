@@ -37,6 +37,7 @@ func newKnowledgeSearchCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			app.Tracker.TrackOutputCount("knowledge search", len(resp.Results))
 			w := cmd.OutOrStdout()
 			if agentMode(cmd, jsonOutput) {
 				return printJSON(w, resp)

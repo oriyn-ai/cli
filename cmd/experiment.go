@@ -54,10 +54,6 @@ func newExperimentRunCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_experiment_created", map[string]interface{}{
-				"product_id":  product,
-				"agent_count": agents,
-			})
 
 			agent := agentMode(cmd, jsonOutput)
 
@@ -155,7 +151,7 @@ func newExperimentListCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_experiment_listed", map[string]interface{}{"product_id": product})
+			app.Tracker.TrackOutputCount("experiment list", len(items))
 
 			w := cmd.OutOrStdout()
 			if agentMode(cmd, jsonOutput) {
@@ -202,10 +198,6 @@ func newExperimentGetCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			app.Tracker.Capture("cli_experiment_viewed", map[string]interface{}{
-				"product_id":    product,
-				"experiment_id": experiment,
-			})
 
 			w := cmd.OutOrStdout()
 			if agentMode(cmd, jsonOutput) {

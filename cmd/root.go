@@ -9,6 +9,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/getsentry/sentry-go"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/oriyn-ai/cli/internal/apiclient"
 	"github.com/oriyn-ai/cli/internal/auth"
@@ -23,6 +24,17 @@ type App struct {
 	Tracker   *telemetry.Client
 	APIBase   string
 	WebBase   string
+
+	// commandStartedAt is set by PersistentPreRunE so the error and
+	// success paths can both compute a duration without a per-command
+	// timer. cobra's PostRunE only fires on success, so we can't rely
+	// on a defer there.
+	commandStartedAt time.Time
+	// commandTop / commandSub are captured at PreRunE so the
+	// completion event uses the same identifiers the started event
+	// did, even on the error path where cmd is no longer in scope.
+	commandTop string
+	commandSub string
 }
 
 // Execute runs the root command and returns a process exit code.
@@ -85,10 +97,26 @@ func Execute(version, commit string) int {
 				})
 			}
 
+			app.commandStartedAt = time.Now()
+			top, sub := splitCommandPath(cmd)
+			app.commandTop = top
+			app.commandSub = sub
+			dispatchTrackCommand(app.Tracker, top, sub)
+			cmdLabel := top
+			if sub != "" {
+				cmdLabel = top + " " + sub
+			}
+			trackFlagsAndOptions(app.Tracker, cmd, cmdLabel)
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
 			if app.Tracker != nil {
+				app.Tracker.TrackCommandComplete(
+					app.commandTop,
+					app.commandSub,
+					time.Since(app.commandStartedAt),
+					nil,
+				)
 				app.Tracker.Close()
 			}
 			// Sentry.Flush is a no-op when the client wasn't init'd,
@@ -124,15 +152,22 @@ func Execute(version, commit string) int {
 	)
 
 	if err := rootCmd.Execute(); err != nil {
-		cmdName := ""
-		if rootCmd.CalledAs() != "" {
-			cmdName = rootCmd.CalledAs()
+		// PreRunE may not have fired (e.g. unknown subcommand fails
+		// during cobra's argument parsing). Fall back to "root" so
+		// dashboards still group these.
+		top := app.commandTop
+		sub := app.commandSub
+		if top == "" {
+			top = "root"
 		}
 		if app.Tracker != nil {
-			app.Tracker.Capture("cli_error", map[string]any{
-				"command":    cmdName,
-				"error_kind": classifyErrorKind(err),
-			})
+			app.Tracker.TrackCommandComplete(
+				top,
+				sub,
+				time.Since(app.commandStartedAt),
+				err,
+			)
+			app.Tracker.Close()
 		}
 		if isInfraError(err) {
 			sentry.CaptureException(err)
@@ -142,6 +177,106 @@ func Execute(version, commit string) int {
 		return classifyError(err)
 	}
 	return 0
+}
+
+// trackFlagsAndOptions walks the cobra flag set and records every
+// flag that was explicitly set on this invocation. Mirrors Vercel's
+// pattern of auto-capturing all flags by name (never by value): the
+// flag name is part of the public API surface (visible in --help)
+// and so safe to ship; the value would freely contain user paths,
+// IDs, or text input and is never captured here.
+//
+// String/int/duration options are recorded via TrackOption with an
+// empty value — the option name alone is the signal.
+func trackFlagsAndOptions(t *telemetry.Client, cmd *cobra.Command, cmdName string) {
+	if t == nil || !t.Enabled() {
+		return
+	}
+	cmd.Flags().Visit(func(f *pflag.Flag) {
+		if f.Name == "" {
+			return
+		}
+		switch f.Value.Type() {
+		case "bool":
+			t.TrackFlag(cmdName, f.Name)
+		default:
+			t.TrackOption(cmdName, f.Name, "")
+		}
+	})
+}
+
+// splitCommandPath extracts the top-level command name and the
+// space-joined subcommand path from a cobra command. For
+// `oriyn products list` it returns ("products", "list"). For a
+// top-level command without subcommands it returns (name, "").
+// For the bare root command it returns ("root", "").
+func splitCommandPath(cmd *cobra.Command) (top, sub string) {
+	if cmd == nil {
+		return "root", ""
+	}
+	parts := []string{}
+	for c := cmd; c != nil && c.Name() != ""; c = c.Parent() {
+		if c.Parent() == nil {
+			break
+		}
+		parts = append([]string{c.Name()}, parts...)
+	}
+	switch len(parts) {
+	case 0:
+		return "root", ""
+	case 1:
+		return parts[0], ""
+	default:
+		return parts[0], strings.Join(parts[1:], " ")
+	}
+}
+
+// dispatchTrackCommand routes a cobra invocation to the typed
+// TrackCliCommand{X} method on the telemetry client. The switch is
+// the allowlist: adding a new top-level cobra command without adding
+// a case here means it lands in the default branch and is captured
+// as TrackCliCommandRoot, which the test suite asserts is unreachable
+// for known commands. Keep alphabetical for grep-ability.
+func dispatchTrackCommand(t *telemetry.Client, top, sub string) {
+	if t == nil {
+		return
+	}
+	switch top {
+	case "doctor":
+		t.TrackCliCommandDoctor(sub)
+	case "enrich":
+		t.TrackCliCommandEnrich(sub)
+	case "experiment":
+		t.TrackCliCommandExperiment(sub)
+	case "hypotheses":
+		t.TrackCliCommandHypotheses(sub)
+	case "init":
+		t.TrackCliCommandInit(sub)
+	case "knowledge":
+		t.TrackCliCommandKnowledge(sub)
+	case "login":
+		t.TrackCliCommandLogin(sub)
+	case "logout":
+		t.TrackCliCommandLogout(sub)
+	case "personas":
+		t.TrackCliCommandPersonas(sub)
+	case "products":
+		t.TrackCliCommandProducts(sub)
+	case "replay":
+		t.TrackCliCommandReplay(sub)
+	case "skill":
+		t.TrackCliCommandSkill(sub)
+	case "synthesize":
+		t.TrackCliCommandSynthesize(sub)
+	case "telemetry":
+		t.TrackCliCommandTelemetry(sub)
+	case "timeline":
+		t.TrackCliCommandTimeline(sub)
+	case "whoami":
+		t.TrackCliCommandWhoami(sub)
+	default:
+		t.TrackCliCommandRoot(top)
+	}
 }
 
 func envOr(name, fallback string) string {
@@ -200,30 +335,4 @@ func isInfraError(err error) bool {
 	return strings.Contains(msg, "failed to access OS keychain") ||
 		strings.Contains(msg, "failed to store credentials in OS keychain") ||
 		strings.Contains(msg, "failed to parse stored credentials")
-}
-
-// classifyErrorKind buckets errors into a small allowlist for telemetry.
-// We never send the raw err.Error(): user-facing error strings often
-// contain paths, URLs, or argument values that we promised never to ship.
-func classifyErrorKind(err error) string {
-	if err == nil {
-		return "none"
-	}
-	msg := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(msg, "not logged in"):
-		return "auth_missing"
-	case strings.Contains(msg, "session expired"):
-		return "auth_expired"
-	case strings.Contains(msg, "keychain"):
-		return "keychain"
-	case strings.Contains(msg, "timed out"), strings.Contains(msg, "timeout"):
-		return "timeout"
-	case strings.Contains(msg, "connection refused"), strings.Contains(msg, "no such host"):
-		return "network"
-	case strings.Contains(msg, "api returned"):
-		return "api_status"
-	default:
-		return "unknown"
-	}
 }

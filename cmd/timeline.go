@@ -21,6 +21,7 @@ func newTimelineCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			app.Tracker.TrackOutputCount("timeline", len(resp.Items))
 			w := cmd.OutOrStdout()
 
 			if outputPath != "" {
