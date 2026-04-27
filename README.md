@@ -30,6 +30,25 @@ go install github.com/oriyn-ai/cli@latest
 Grab the right binary from the [latest release](https://github.com/oriyn-ai/cli/releases/latest),
 make it executable, put it on your `PATH`.
 
+### Uninstall
+
+One command, reverses everything `install.sh` and the CLI itself put on disk:
+
+```bash
+oriyn uninstall            # confirms first; clears keychain, config, skill, binary
+oriyn uninstall --dry-run  # preview without removing
+oriyn uninstall -y         # non-interactive (CI / scripts)
+```
+
+Flags `--keep-config`, `--keep-skill`, and `--keep-binary` opt individual targets out.
+
+If the binary is already gone (or you installed via `curl | bash` and want to use
+the same path):
+
+```bash
+curl -fsSL https://oriyn.ai/install.sh | bash -s -- --uninstall
+```
+
 ---
 
 ## Authenticate

@@ -136,6 +136,7 @@ func Execute(version, commit string) int {
 		newInitCmd(app),
 		newLoginCmd(app),
 		newLogoutCmd(app),
+		newUninstallCmd(app),
 		newWhoamiCmd(app),
 		newDoctorCmd(app, version, commit),
 		newSkillCmd(app),
@@ -272,6 +273,8 @@ func dispatchTrackCommand(t *telemetry.Client, top, sub string) {
 		t.TrackCliCommandTelemetry(sub)
 	case "timeline":
 		t.TrackCliCommandTimeline(sub)
+	case "uninstall":
+		t.TrackCliCommandUninstall(sub)
 	case "whoami":
 		t.TrackCliCommandWhoami(sub)
 	default:

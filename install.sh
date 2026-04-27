@@ -82,7 +82,45 @@ path_hint() {
     printf "    export PATH=\"%s:\$PATH\"\n\n" "$BIN_DIR"
 }
 
+uninstall() {
+    banner
+    step "Uninstalling Oriyn CLI"
+
+    local removed=0
+
+    if [ -L "${BIN_DIR}/${BIN_NAME}" ] || [ -e "${BIN_DIR}/${BIN_NAME}" ]; then
+        rm -f "${BIN_DIR}/${BIN_NAME}"
+        ok "Removed ${BIN_DIR}/${BIN_NAME}"
+        removed=1
+    fi
+
+    if [ -d "${SHARE_DIR}" ]; then
+        rm -rf "${SHARE_DIR}"
+        ok "Removed ${SHARE_DIR}"
+        removed=1
+    fi
+
+    if [ "$removed" = "0" ]; then
+        warn "Nothing to remove — no install found at ${BIN_DIR}/${BIN_NAME} or ${SHARE_DIR}"
+    fi
+
+    printf "\n"
+    printf "%sNote:%s the script removes the binary only.\n" "$BOLD" "$RESET"
+    printf "Credentials, config, and the agent skill are managed by the CLI itself.\n"
+    printf "If you have a working install of %soriyn%s, run it first to clear those:\n\n" "$BOLD" "$RESET"
+    printf "    oriyn uninstall\n\n"
+    printf "Or delete them manually:\n"
+    printf "    rm -rf ~/.config/oriyn ~/.claude/skills/oriyn\n"
+    printf "    # macOS keychain:\n"
+    printf "    security delete-generic-password -s oriyn-cli -a credentials 2>/dev/null || true\n"
+}
+
 main() {
+    if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "-u" ]; then
+        uninstall
+        exit 0
+    fi
+
     banner
 
     local target version binary_name base_url binary_url checksums_url
@@ -143,4 +181,4 @@ main() {
     printf "Run %s%s --help%s to get started.\n" "$BOLD" "$BIN_NAME" "$RESET"
 }
 
-main
+main "$@"
