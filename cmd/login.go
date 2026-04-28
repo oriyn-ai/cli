@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,16 +20,13 @@ import (
 )
 
 // loginTracker is the subset of telemetry.Client we need from runLogin.
-// Defined as an interface so tests can pass a stub.
 type loginTracker interface {
 	Identify(userID string, props map[string]any)
 	TrackLoginState(state telemetry.LoginState)
 }
 
 type callbackResult struct {
-	accessToken  string
-	refreshToken string
-	expiresIn    int64
+	token string
 }
 
 func newLoginCmd(app *App) *cobra.Command {
@@ -36,11 +34,11 @@ func newLoginCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate with Oriyn via browser login",
-		Long: "Starts a local callback server and opens the browser for Supabase " +
+		Long: "Starts a local callback server and opens the browser for Clerk " +
 			"sign-in. Use --no-browser on headless machines or remote shells — " +
 			"the URL will be printed for you to open manually.\n\n" +
 			"For non-interactive CI/agent environments, set ORIYN_ACCESS_TOKEN " +
-			"instead of running `oriyn login`.",
+			"to a Clerk JWT instead of running `oriyn login`.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runLogin(cmd.Context(), app.WebBase, app.APIBase, app.AuthStore, app.Tracker, noBrowser, cmd.OutOrStdout())
 		},
@@ -85,10 +83,18 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 	select {
 	case cb := <-callbackCh:
 		trackState(tracker, telemetry.LoginStateCallbackReceived)
+
+		expiresAt, err := jwtExpirySeconds(cb.token)
+		if err != nil {
+			// Fall back to a 24h assumption if parsing fails — matches the
+			// recommended `cli` template lifetime. The API rejects on real
+			// expiry, which forces a re-login anyway.
+			expiresAt = time.Now().Unix() + 24*60*60
+		}
+
 		creds := &auth.Credentials{
-			AccessToken:  cb.accessToken,
-			RefreshToken: cb.refreshToken,
-			ExpiresAt:    time.Now().Unix() + cb.expiresIn,
+			AccessToken: cb.token,
+			ExpiresAt:   expiresAt,
 		}
 		if err := authStore.Save(creds); err != nil {
 			trackState(tracker, telemetry.LoginStateFailed)
@@ -159,6 +165,31 @@ func fetchMe(ctx context.Context, apiBase, token string) (*meInfo, error) {
 	return &meInfo{userID: data.UserID, email: data.Email}, nil
 }
 
+// jwtExpirySeconds extracts the `exp` claim from a JWT without verifying the
+// signature. We don't need to verify here — the API verifies on every request
+// and rejects forged or tampered tokens. The CLI just needs `exp` to know
+// when to prompt for re-login.
+func jwtExpirySeconds(token string) (int64, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return 0, fmt.Errorf("not a JWT")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return 0, fmt.Errorf("decode payload: %w", err)
+	}
+	var claims struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return 0, fmt.Errorf("parse payload: %w", err)
+	}
+	if claims.Exp == 0 {
+		return 0, fmt.Errorf("no exp claim")
+	}
+	return claims.Exp, nil
+}
+
 func makeCallbackHandler(expectedState string, ch chan<- callbackResult) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -169,18 +200,7 @@ func makeCallbackHandler(expectedState string, ch chan<- callbackResult) http.Ha
 			return
 		}
 
-		var expiresIn int64
-		if v := q.Get("expires_in"); v != "" {
-			if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
-				expiresIn = parsed
-			}
-		}
-
-		ch <- callbackResult{
-			accessToken:  q.Get("access_token"),
-			refreshToken: q.Get("refresh_token"),
-			expiresIn:    expiresIn,
-		}
+		ch <- callbackResult{token: q.Get("token")}
 
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, `<html><body style="font-family:system-ui;text-align:center;padding:4rem">`+
