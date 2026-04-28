@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,10 +13,8 @@ import (
 )
 
 const (
-	supabaseURL            = "https://ddykhzwjzbgpomlmkeji.supabase.co"
-	supabasePublishableKey = "sb_publishable_FZtcboPlsEdA9tFS0bOWdQ_YBFpphBv"
-	keyringService         = "oriyn-cli"
-	keyringUser            = "credentials"
+	keyringService = "oriyn-cli"
+	keyringUser    = "credentials"
 )
 
 var (
@@ -25,10 +22,14 @@ var (
 	ErrSessionExpired = errors.New("session expired — run `oriyn login` again")
 )
 
+// Credentials stores a Clerk-issued JWT minted via the `cli` JWT template.
+// There is no refresh path — Clerk session tokens for the CLI are short-lived
+// (24h by default per the template config) and the user re-runs `oriyn login`
+// when they expire. This is intentional: it keeps the CLI free of any
+// long-term refresh secret.
 type Credentials struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresAt    int64  `json:"expires_at"`
+	AccessToken string `json:"access_token"`
+	ExpiresAt   int64  `json:"expires_at"`
 }
 
 // Keyring abstracts OS keychain access for testability.
@@ -72,7 +73,6 @@ func (s *Store) Load() (*Credentials, error) {
 }
 
 func (s *Store) Save(creds *Credentials) error {
-	// Marshaling tokens for OS keyring storage — by design.
 	//nolint:gosec // G117: intentional secret marshaling; destination is the OS keyring.
 	data, err := json.Marshal(creds)
 	if err != nil {
@@ -89,9 +89,10 @@ func (s *Store) Delete() error {
 	return nil
 }
 
-// GetValidAccessToken returns a valid access token, refreshing if needed.
-// It implements the AuthProvider interface used by the API client.
-func (s *Store) GetValidAccessToken(ctx context.Context) (string, error) {
+// GetValidAccessToken returns the stored token if not expired. Implements
+// the AuthProvider interface used by the API client. There is no refresh —
+// when the token expires the user must re-run `oriyn login`.
+func (s *Store) GetValidAccessToken(_ context.Context) (string, error) {
 	if token := os.Getenv("ORIYN_ACCESS_TOKEN"); token != "" {
 		return token, nil
 	}
@@ -101,70 +102,12 @@ func (s *Store) GetValidAccessToken(ctx context.Context) (string, error) {
 		return "", ErrNotLoggedIn
 	}
 
-	if creds.ExpiresAt-time.Now().Unix() > 60 {
-		return creds.AccessToken, nil
-	}
-
-	refreshed, err := s.refreshToken(ctx, creds.RefreshToken)
-	if err != nil {
+	// 60s safety margin — if the token expires within a minute, force re-login
+	// rather than risking a request that will be rejected mid-flight.
+	if creds.ExpiresAt-time.Now().Unix() <= 60 {
 		_ = s.Delete()
 		return "", ErrSessionExpired
 	}
 
-	creds.AccessToken = refreshed.AccessToken
-	creds.RefreshToken = refreshed.RefreshToken
-	creds.ExpiresAt = refreshed.ExpiresAt
-	if err := s.Save(creds); err != nil {
-		return "", err
-	}
-
 	return creds.AccessToken, nil
-}
-
-type refreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
-}
-
-type refreshResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int64  `json:"expires_in"`
-}
-
-func (s *Store) refreshToken(ctx context.Context, token string) (*Credentials, error) {
-	// Marshaling refresh token into a request body sent to oriyn-api.
-	//nolint:gosec // G117: intentional; destination is the API over TLS.
-	body, err := json.Marshal(refreshRequest{RefreshToken: token})
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode refresh request: %w", err)
-	}
-
-	url := supabaseURL + "/auth/v1/token?grant_type=refresh_token"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create refresh request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("apikey", supabasePublishableKey)
-
-	resp, err := s.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to reach Supabase for token refresh: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("session expired (%d) — run `oriyn login` again", resp.StatusCode)
-	}
-
-	var data refreshResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to parse token refresh response: %w", err)
-	}
-
-	return &Credentials{
-		AccessToken:  data.AccessToken,
-		RefreshToken: data.RefreshToken,
-		ExpiresAt:    time.Now().Unix() + data.ExpiresIn,
-	}, nil
 }

@@ -221,22 +221,18 @@ func (e *APIError) Error() string {
 	return e.Message
 }
 
-// PermissionError represents a 403 response from the Oriyn API where the
-// server included a permission payload. The CLI renders this as a friendly
-// message instead of a raw HTTP error.
+// PermissionError represents a 403 response from a gated Oriyn API route
+// where the server included a permission payload. The CLI renders this as a
+// friendly message instead of a raw HTTP error.
 type PermissionError struct {
 	StatusCode         int
 	RequiredPermission string
-	Role               string // empty string means "not a member of this organization"
-	OrgID              string
+	Role               string
 }
 
 func (e *PermissionError) Error() string {
-	if e.Role == "" {
-		return "you are not a member of this organization"
-	}
 	return fmt.Sprintf(
-		"this action requires `%s`. Your role is `%s`. Ask an Owner or Admin for access, or request a role change.",
+		"this action requires `%s`. Your role is `%s`. Ask an Admin for access, or request a role change.",
 		e.RequiredPermission, e.Role,
 	)
 }

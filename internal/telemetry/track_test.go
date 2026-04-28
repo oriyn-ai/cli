@@ -112,9 +112,8 @@ func TestTrackCommandComplete_PermissionErrorPayload(t *testing.T) {
 
 	permErr := &apiclient.PermissionError{
 		StatusCode:         403,
-		RequiredPermission: "experiments.run",
-		Role:               "viewer",
-		OrgID:              "org_xyz",
+		RequiredPermission: "org:content:write",
+		Role:               "org:member",
 	}
 	c.TrackCommandComplete("experiment", "run", time.Second, permErr)
 
@@ -122,17 +121,11 @@ func TestTrackCommandComplete_PermissionErrorPayload(t *testing.T) {
 	if !strings.Contains(out, `"outcome":"permission_error"`) {
 		t.Errorf("missing outcome: %q", out)
 	}
-	if !strings.Contains(out, `"error_required_permission":"experiments.run"`) {
+	if !strings.Contains(out, `"error_required_permission":"org:content:write"`) {
 		t.Errorf("missing required permission: %q", out)
 	}
-	if !strings.Contains(out, `"error_role":"viewer"`) {
+	if !strings.Contains(out, `"error_role":"org:member"`) {
 		t.Errorf("missing role: %q", out)
-	}
-	if !strings.Contains(out, `"error_has_org_id":true`) {
-		t.Errorf("missing org id flag: %q", out)
-	}
-	if strings.Contains(out, "org_xyz") {
-		t.Errorf("org id leaked into payload: %q", out)
 	}
 }
 
