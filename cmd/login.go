@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -84,6 +85,11 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 	case cb := <-callbackCh:
 		trackState(tracker, telemetry.LoginStateCallbackReceived)
 
+		if cb.token == "" {
+			trackState(tracker, telemetry.LoginStateFailed)
+			return fmt.Errorf("login callback returned no token — your CLI is likely out of date for this server. Re-run install.sh to update")
+		}
+
 		expiresAt, err := jwtExpirySeconds(cb.token)
 		if err != nil {
 			// Fall back to a 24h assumption if parsing fails — matches the
@@ -96,13 +102,24 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 			AccessToken: cb.token,
 			ExpiresAt:   expiresAt,
 		}
+
+		// Verify the token reaches the API before persisting. Saving first
+		// then probing risks caching a useless token (the exact failure mode
+		// of the v0.4.0 → v0.5.0 callback-shape skew). A network error is
+		// not authoritative — we still save and let the user retry later.
+		me, fetchErr := fetchMe(ctx, apiBase, creds.AccessToken)
+		var rejected *authRejectedError
+		if errors.As(fetchErr, &rejected) {
+			trackState(tracker, telemetry.LoginStateFailed)
+			return fmt.Errorf("API rejected the token (status %d) — your CLI is likely out of date for this server. Re-run install.sh to update", rejected.statusCode)
+		}
+
 		if err := authStore.Save(creds); err != nil {
 			trackState(tracker, telemetry.LoginStateFailed)
 			return err
 		}
 
-		me, err := fetchMe(ctx, apiBase, creds.AccessToken)
-		if err == nil {
+		if me != nil {
 			trackState(tracker, telemetry.LoginStateProfileFetched)
 			if me.userID != "" && tracker != nil {
 				tracker.Identify(me.userID, nil)
@@ -113,7 +130,7 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 				fmt.Fprintln(w, "Logged in successfully.")
 			}
 		} else {
-			fmt.Fprintln(w, "Logged in successfully.")
+			fmt.Fprintln(w, "Logged in (could not reach the API to verify profile — token saved).")
 		}
 
 		trackState(tracker, telemetry.LoginStateSucceeded)
@@ -138,6 +155,18 @@ type meInfo struct {
 	email  string
 }
 
+// authRejectedError signals that the API explicitly rejected the token
+// (401/403). It is distinct from a network/transport error so callers can
+// refuse to persist a token the server has already disowned, while still
+// being lenient when /v1/me is simply unreachable.
+type authRejectedError struct {
+	statusCode int
+}
+
+func (e *authRejectedError) Error() string {
+	return fmt.Sprintf("API rejected token (status %d)", e.statusCode)
+}
+
 func fetchMe(ctx context.Context, apiBase, token string) (*meInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBase+"/v1/me", nil)
 	if err != nil {
@@ -151,6 +180,9 @@ func fetchMe(ctx context.Context, apiBase, token string) (*meInfo, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, &authRejectedError{statusCode: resp.StatusCode}
+	}
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("API returned %d", resp.StatusCode)
 	}
@@ -200,7 +232,25 @@ func makeCallbackHandler(expectedState string, ch chan<- callbackResult) http.Ha
 			return
 		}
 
-		ch <- callbackResult{token: q.Get("token")}
+		token := q.Get("token")
+		// Render success only when a token is actually present. An empty
+		// token here means the web app sent a callback shape this binary
+		// doesn't understand (typical version-skew failure). Rendering
+		// "successful" anyway is the bug that masked the v0.4.0 → v0.5.0
+		// migration; refuse the page and signal the failure to runLogin.
+		if token == "" {
+			ch <- callbackResult{token: ""}
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, `<html><body style="font-family:system-ui;text-align:center;padding:4rem">`+
+				`<h1>Authentication failed</h1>`+
+				`<p>The login callback did not include a token. Your CLI is likely out of date for this server.</p>`+
+				`<p>Re-run the installer and try again:</p>`+
+				`<pre>curl -fsSL https://raw.githubusercontent.com/oriyn-ai/cli/main/install.sh | bash</pre>`+
+				`</body></html>`)
+			return
+		}
+
+		ch <- callbackResult{token: token}
 
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, `<html><body style="font-family:system-ui;text-align:center;padding:4rem">`+
