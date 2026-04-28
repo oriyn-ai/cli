@@ -96,19 +96,15 @@ func TestClassifyError_APIErrorExtractsFields(t *testing.T) {
 func TestClassifyError_PermissionErrorExtractsFields(t *testing.T) {
 	permErr := &apiclient.PermissionError{
 		StatusCode:         403,
-		RequiredPermission: "products.write",
-		Role:               "viewer",
-		OrgID:              "org_abc123",
+		RequiredPermission: "org:content:write",
+		Role:               "org:member",
 	}
 	info := ClassifyError(permErr)
 	if info.Outcome != OutcomePermissionError {
 		t.Errorf("Outcome = %q, want permission_error", info.Outcome)
 	}
-	if info.RequiredPermission != "products.write" || info.Role != "viewer" {
+	if info.RequiredPermission != "org:content:write" || info.Role != "org:member" {
 		t.Errorf("permission fields not extracted: %+v", info)
-	}
-	if !info.HasOrgID {
-		t.Error("HasOrgID should be true")
 	}
 }
 

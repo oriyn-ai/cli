@@ -403,9 +403,6 @@ func (c *Client) TrackCommandComplete(command, subcommand string, duration time.
 	if info.Role != "" {
 		props["error_role"] = info.Role
 	}
-	if info.HasOrgID {
-		props["error_has_org_id"] = true
-	}
 	c.capture(EventCommandCompleted, props)
 }
 

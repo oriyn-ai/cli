@@ -135,8 +135,7 @@ type ErrorInfo struct {
 	HasCreditsRequired bool   // boolean to avoid leaking the value
 	HasMaxAgentCount   bool
 	RequiredPermission string // safe: enum-shaped
-	Role               string // safe: enum-shaped (member|admin|owner)
-	HasOrgID           bool   // boolean only — actual ID is PII
+	Role               string // safe: enum-shaped (org:admin|org:member)
 }
 
 // ClassifyError produces an ErrorInfo for telemetry. Never returns the
@@ -168,7 +167,6 @@ func ClassifyError(err error) ErrorInfo {
 			Status:             permErr.StatusCode,
 			RequiredPermission: permErr.RequiredPermission,
 			Role:               permErr.Role,
-			HasOrgID:           permErr.OrgID != "",
 		}
 	}
 

@@ -46,26 +46,22 @@ func checkResp(resp *resty.Response, err error) error {
 		return nil
 	}
 
-	// FastAPI wraps validated errors in {"detail": ...}. Permission denials
-	// specifically include a required_permission field — lift those into a
-	// typed PermissionError so the CLI can render a friendly message and
-	// exit with a dedicated code.
+	// 403 responses from gated routes carry required_permission + role at
+	// the top level (see oriyn_api.errors._oriyn_error_handler). Lift them
+	// into a typed PermissionError so the CLI can render a friendly message
+	// and exit with a dedicated code.
 	body := resp.Body()
 	if resp.StatusCode() == 403 && len(body) > 0 {
 		var envelope struct {
-			Detail struct {
-				Error              string `json:"error"`
-				RequiredPermission string `json:"required_permission"`
-				Role               string `json:"role"`
-				OrgID              string `json:"org_id"`
-			} `json:"detail"`
+			Error              string `json:"error"`
+			RequiredPermission string `json:"required_permission"`
+			Role               string `json:"role"`
 		}
-		if jsonErr := json.Unmarshal(body, &envelope); jsonErr == nil && envelope.Detail.RequiredPermission != "" {
+		if jsonErr := json.Unmarshal(body, &envelope); jsonErr == nil && envelope.RequiredPermission != "" {
 			return &PermissionError{
 				StatusCode:         resp.StatusCode(),
-				RequiredPermission: envelope.Detail.RequiredPermission,
-				Role:               envelope.Detail.Role,
-				OrgID:              envelope.Detail.OrgID,
+				RequiredPermission: envelope.RequiredPermission,
+				Role:               envelope.Role,
 			}
 		}
 	}
