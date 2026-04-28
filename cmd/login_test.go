@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -59,10 +58,62 @@ func makeFakeJWT(t *testing.T, exp int64) string {
 	return header + "." + base64.RawURLEncoding.EncodeToString(payload) + ".sig"
 }
 
-// Drives runLogin against a fake web app that hits the local callback with
-// the given query, and a fake API that responds to /v1/me with apiStatus.
-// Returns the runLogin error, captured stdout, and whether creds were saved.
-func driveLogin(t *testing.T, callbackQuery url.Values, apiStatus int) (loginErr error, out string, saved bool) {
+// teeWriter is a writer the test goroutine can both read from and let runLogin
+// write into. It buffers output and signals new data on a channel so the URL
+// watcher doesn't have to poll on a fixed interval.
+type teeWriter struct {
+	mu  sync.Mutex
+	buf strings.Builder
+	ch  chan struct{}
+}
+
+func newTeeWriter() *teeWriter { return &teeWriter{ch: make(chan struct{}, 1)} }
+
+func (t *teeWriter) Write(b []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	n, err := t.buf.Write(b)
+	select {
+	case t.ch <- struct{}{}:
+	default:
+	}
+	return n, err
+}
+
+func (t *teeWriter) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.buf.String()
+}
+
+func waitForLoginURL(t *testing.T, w *teeWriter) (state, port string) {
+	t.Helper()
+	deadline := time.After(3 * time.Second)
+	for {
+		for _, line := range strings.Split(w.String(), "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.Contains(line, "port=") || !strings.Contains(line, "state=") {
+				continue
+			}
+			u, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
+			return u.Query().Get("state"), u.Query().Get("port")
+		}
+		select {
+		case <-w.ch:
+		case <-deadline:
+			t.Fatalf("login URL never appeared in output: %q", w.String())
+			return "", ""
+		}
+	}
+}
+
+// driveLogin runs runLogin with noBrowser=true, watches its output for the
+// printed login URL, then fires the callback with callbackQuery+state. The
+// fake API server answers /v1/me with apiStatus.
+func driveLogin(t *testing.T, callbackQuery url.Values, apiStatus int) (out string, saved bool, err error) {
 	t.Helper()
 
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -80,14 +131,10 @@ func driveLogin(t *testing.T, callbackQuery url.Values, apiStatus int) (loginErr
 	kr := newFakeKeyring()
 	store := auth.NewStoreWithKeyring(kr)
 
-	// Fake "browser" that hits the local callback as soon as runLogin opens it.
-	// runLogin builds the loginURL with `?port=...&state=...`, but we don't see
-	// that URL — so we drive it by intercepting `browser.OpenURL` via a fake
-	// web base that's a server that, on GET, forwards the inbound `port` and
-	// `state` to 127.0.0.1:<port>/callback?<callbackQuery>+state.
-	fakeWeb := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		port := r.URL.Query().Get("port")
-		state := r.URL.Query().Get("state")
+	tw := newTeeWriter()
+
+	go func() {
+		state, port := waitForLoginURL(t, tw)
 		q := url.Values{}
 		for k, vs := range callbackQuery {
 			for _, v := range vs {
@@ -95,135 +142,31 @@ func driveLogin(t *testing.T, callbackQuery url.Values, apiStatus int) (loginErr
 			}
 		}
 		q.Set("state", state)
-		// Hit the local callback directly; runLogin's success/failure flows
-		// kick in regardless of what the browser sees.
-		go func() {
-			_, _ = http.Get("http://127.0.0.1:" + port + "/callback?" + q.Encode())
-		}()
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer fakeWeb.Close()
-
-	// Patch browser.OpenURL via the noBrowser=false path: runLogin will call
-	// browser.OpenURL with `<webBase>/auth/cli/login?port=X&state=Y`. We can't
-	// intercept the package-level function here, so instead we use noBrowser
-	// mode and fire the request manually from a goroutine.
-	go func() {
-		// give runLogin a moment to bind + register the handler
-		deadline := time.Now().Add(2 * time.Second)
-		for time.Now().Before(deadline) {
-			// poll the printed URL: not directly observable, so just kick the
-			// fake web app on the assumption runLogin already printed/awaiting
-			time.Sleep(20 * time.Millisecond)
-			break
+		resp, getErr := http.Get("http://127.0.0.1:" + port + "/callback?" + q.Encode())
+		if getErr == nil {
+			_ = resp.Body.Close()
 		}
 	}()
 
-	var buf bytes.Buffer
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// We need the loginURL that runLogin would open. Since we're using
-	// noBrowser=true, runLogin prints it. We watch the buffer for the URL,
-	// extract port+state, and drive the callback.
-	pr, pw := newPipeWriter()
-	go func() {
-		state, port := waitForLoginURL(t, pr)
-		q := url.Values{}
-		for k, vs := range callbackQuery {
-			for _, v := range vs {
-				q.Add(k, v)
-			}
-		}
-		q.Set("state", state)
-		_, _ = http.Get("http://127.0.0.1:" + port + "/callback?" + q.Encode())
-	}()
+	// webBase is unused on the noBrowser=true path beyond being printed in the
+	// URL — runLogin still embeds it, so any value works.
+	err = runLogin(ctx, "http://web.invalid", api.URL, store, nullTracker{}, true, tw)
+	out = tw.String()
 
-	loginErr = runLogin(ctx, fakeWeb.URL, api.URL, store, nullTracker{}, true, pw)
-	pw.Close()
-	out = buf.String() + drainPipe(pr)
-
-	if _, err := kr.Get("oriyn-cli", "credentials"); err == nil {
+	if _, kerr := kr.Get("oriyn-cli", "credentials"); kerr == nil {
 		saved = true
 	}
-	return loginErr, out, saved
+	return out, saved, err
 }
-
-// helpers — a teed buffer so the goroutine can read what runLogin writes.
-
-type pipeWriter struct {
-	mu     sync.Mutex
-	buf    bytes.Buffer
-	ch     chan struct{}
-	closed bool
-}
-
-func newPipeWriter() (*pipeWriter, *pipeWriter) {
-	p := &pipeWriter{ch: make(chan struct{}, 1)}
-	return p, p
-}
-
-func (p *pipeWriter) Write(b []byte) (int, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	n, err := p.buf.Write(b)
-	select {
-	case p.ch <- struct{}{}:
-	default:
-	}
-	return n, err
-}
-
-func (p *pipeWriter) Close() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.closed = true
-	close(p.ch)
-	return nil
-}
-
-func waitForLoginURL(t *testing.T, p *pipeWriter) (state, port string) {
-	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		p.mu.Lock()
-		s := p.buf.String()
-		p.mu.Unlock()
-		if i := strings.Index(s, "http://"); i >= 0 || strings.Contains(s, "://") {
-			// Find any URL with port= and state=
-			for _, line := range strings.Split(s, "\n") {
-				if strings.Contains(line, "port=") && strings.Contains(line, "state=") {
-					line = strings.TrimSpace(line)
-					u, err := url.Parse(strings.TrimSpace(line))
-					if err != nil {
-						continue
-					}
-					return u.Query().Get("state"), u.Query().Get("port")
-				}
-			}
-		}
-		select {
-		case <-p.ch:
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
-	t.Fatalf("login URL never appeared in output: %q", p.buf.String())
-	return "", ""
-}
-
-func drainPipe(p *pipeWriter) string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.buf.String()
-}
-
-// --- the actual regressions ---
 
 // Empty token in callback (the v0.4.0 → v0.5.0 skew shape) must NOT save creds
 // and must NOT report success.
 func TestRunLogin_EmptyTokenInCallbackFailsLoudly(t *testing.T) {
 	q := url.Values{} // no token, no access_token, nothing
-	err, out, saved := driveLogin(t, q, http.StatusOK)
+	out, saved, err := driveLogin(t, q, http.StatusOK)
 	if err == nil {
 		t.Fatalf("expected runLogin to fail with empty token; got success. out=%q", out)
 	}
@@ -243,7 +186,7 @@ func TestRunLogin_APIRejectsTokenDoesNotSave(t *testing.T) {
 	q := url.Values{}
 	q.Set("token", jwt)
 
-	err, out, saved := driveLogin(t, q, http.StatusUnauthorized)
+	out, saved, err := driveLogin(t, q, http.StatusUnauthorized)
 	if err == nil {
 		t.Fatalf("expected runLogin to fail when API returned 401; got success. out=%q", out)
 	}
@@ -251,7 +194,7 @@ func TestRunLogin_APIRejectsTokenDoesNotSave(t *testing.T) {
 		t.Fatalf("expected error to mention API rejection, got: %v", err)
 	}
 	if saved {
-		t.Fatalf("creds were saved despite API rejection")
+		t.Fatal("creds were saved despite API rejection")
 	}
 }
 
@@ -262,7 +205,7 @@ func TestRunLogin_HappyPathSavesAndGreets(t *testing.T) {
 	q := url.Values{}
 	q.Set("token", jwt)
 
-	err, out, saved := driveLogin(t, q, http.StatusOK)
+	out, saved, err := driveLogin(t, q, http.StatusOK)
 	if err != nil {
 		t.Fatalf("expected runLogin to succeed; got %v. out=%q", err, out)
 	}
