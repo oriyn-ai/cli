@@ -6,6 +6,28 @@ Format: `## [version] - YYYY-MM-DD` followed by Added / Changed / Fixed sections
 
 ---
 
+## [0.5.0](https://github.com/oriyn-ai/cli/compare/v0.4.0...v0.5.0) (2026-04-28)
+
+
+### Features
+
+* switch CLI auth to Clerk JWT ([7116b49](https://github.com/oriyn-ai/cli/commit/7116b49de1539a9699bc32f98f9dc00fc8645e89))
+* switch CLI auth to Clerk JWT ([1455f78](https://github.com/oriyn-ai/cli/commit/1455f78fbae20fbacc917587076b8c36ab6e35f2))
+* **telemetry:** rebuild around Vercel CLI pattern ([50c39ce](https://github.com/oriyn-ai/cli/commit/50c39cea9046804009d1b700ace7862b0ef44606))
+* **telemetry:** rebuild around Vercel CLI pattern ([4db60a5](https://github.com/oriyn-ai/cli/commit/4db60a5897be9b46701032d0a3cc4b332eccece0))
+* **telemetry:** structured diagnostics — command lifecycle, error classifier, login funnel ([6ef0c8b](https://github.com/oriyn-ai/cli/commit/6ef0c8b1f96dc500aa613bb63dc2cd0cf85ca757))
+* **telemetry:** structured diagnostics — lifecycle + error classifier + login funnel ([6534ec0](https://github.com/oriyn-ai/cli/commit/6534ec03527b84301158eb9e8adb1938d18b9b91))
+* **uninstall:** add `oriyn uninstall` + `install.sh --uninstall` ([5cc7f2f](https://github.com/oriyn-ai/cli/commit/5cc7f2f5b3a4b1cc523b78511d2d60118cac96cd))
+* **uninstall:** add `oriyn uninstall` + `install.sh --uninstall` ([c40088e](https://github.com/oriyn-ai/cli/commit/c40088e1dec77175b6ab3f0424ce96a029da2cb5))
+
+
+### Bug Fixes
+
+* **apiclient,telemetry:** align with flat 403 error shape ([dadae18](https://github.com/oriyn-ai/cli/commit/dadae18077af9a43daec3a0283a66d8f49be6cc0))
+* **ci:** pin go 1.26.2 + golangci-lint v2.11.4 ([ddc4168](https://github.com/oriyn-ai/cli/commit/ddc4168c0a258237a9d42707ec18613764e1a867))
+* **install:** hoist temp vars so EXIT trap doesn't trip set ([573d14a](https://github.com/oriyn-ai/cli/commit/573d14a70fad7b6b47558afde26095867ef752d7))
+* **telemetry:** make ORIYN_TELEMETRY=log override CI auto-skip; scrub CI env in dispatch test ([cb7f618](https://github.com/oriyn-ai/cli/commit/cb7f6184cd100c22e47ed7af7f1825308d1060f3))
+
 ## [Unreleased]
 
 ## [0.4.0] - 2026-04-24
