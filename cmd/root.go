@@ -13,8 +13,27 @@ import (
 
 	"github.com/oriyn-ai/cli/internal/apiclient"
 	"github.com/oriyn-ai/cli/internal/auth"
+	"github.com/oriyn-ai/cli/internal/oauth"
 	"github.com/oriyn-ai/cli/internal/telemetry"
 )
+
+// Clerk OAuth client for the production Oriyn instance. Public client
+// (PKCE) — there is no secret to keep. The client_id is not sensitive on
+// its own; it identifies the app, not the user.
+const (
+	clerkOAuthClientID     = "GeT6xrbcPZsNblNg"
+	clerkOAuthAuthorizeURL = "https://clerk.oriyn.ai/oauth/authorize"
+	//nolint:gosec // G101 false positive: this is a public OAuth endpoint URL, not a credential.
+	clerkOAuthTokenURL    = "https://clerk.oriyn.ai/oauth/token"
+	clerkOAuthUserInfoURL = "https://clerk.oriyn.ai/oauth/userinfo"
+)
+
+// clerkOAuthScopes are the scopes the CLI requests at the authorize step.
+// `openid` enables OIDC /userinfo for the post-login greeting; `email`
+// pulls the address into the userinfo response; `offline_access` enables
+// refresh tokens so the user isn't re-prompted on every session expiry;
+// `profile` is requested for forward-compat (display name, etc.).
+var clerkOAuthScopes = []string{"openid", "email", "offline_access", "profile"}
 
 const sentryDSN = "https://7a9c0f680579c791f90ecee37a16375f@o4510953905651712.ingest.us.sentry.io/4511156841283584"
 
@@ -22,6 +41,7 @@ type App struct {
 	AuthStore *auth.Store
 	API       *apiclient.Client
 	Tracker   *telemetry.Client
+	OAuth     oauth.Config
 	APIBase   string
 	WebBase   string
 
@@ -85,7 +105,14 @@ func Execute(version, commit string) int {
 				color.NoColor = true
 			}
 
-			app.AuthStore = auth.NewStore()
+			app.OAuth = oauth.Config{
+				ClientID:     clerkOAuthClientID,
+				AuthorizeURL: clerkOAuthAuthorizeURL,
+				TokenURL:     clerkOAuthTokenURL,
+				UserInfoURL:  clerkOAuthUserInfoURL,
+				Scopes:       clerkOAuthScopes,
+			}
+			app.AuthStore = auth.NewStore(app.OAuth)
 			app.APIBase, _ = cmd.Flags().GetString("api-base")
 			app.WebBase, _ = cmd.Flags().GetString("web-base")
 			app.API = apiclient.New(app.APIBase, app.AuthStore)
