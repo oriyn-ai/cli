@@ -6,6 +6,20 @@ Format: `## [version] - YYYY-MM-DD` followed by Added / Changed / Fixed sections
 
 ---
 
+## [0.6.0](https://github.com/oriyn-ai/cli/compare/v0.5.0...v0.6.0) (2026-04-29)
+
+
+### Features
+
+* **auth:** switch CLI to OAuth 2.0 + PKCE (Clerk) ([2662872](https://github.com/oriyn-ai/cli/commit/2662872bf0b9e73dac705c732976eae43fef5c74))
+* **auth:** switch CLI to OAuth 2.0 + PKCE (Clerk) ([06bd251](https://github.com/oriyn-ai/cli/commit/06bd2518b2fcc20bcc850345f33b47af6c4e864e))
+
+
+### Bug Fixes
+
+* **login_test:** close response bodies, return error last ([25f2d75](https://github.com/oriyn-ai/cli/commit/25f2d752340cbc3ec3eb45c71df6aaa384d990f5))
+* **login_test:** close response bodies, return error last ([9218cfd](https://github.com/oriyn-ai/cli/commit/9218cfd02159c2ae82ff36e01271b12a24779456))
+
 ## [0.5.0](https://github.com/oriyn-ai/cli/compare/v0.4.0...v0.5.0) (2026-04-28)
 
 
