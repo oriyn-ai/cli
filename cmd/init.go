@@ -84,5 +84,5 @@ func ensureLoggedIn(ctx context.Context, app *App, w io.Writer, noBrowser bool) 
 		return err
 	}
 	fmt.Fprintln(w, "[login] starting browser OAuth...")
-	return runLogin(ctx, app.WebBase, app.APIBase, app.AuthStore, app.Tracker, noBrowser, w)
+	return runLogin(ctx, app.OAuth, app.AuthStore, app.Tracker, noBrowser, w)
 }

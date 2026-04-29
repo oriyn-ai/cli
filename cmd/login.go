@@ -2,21 +2,17 @@ package cmd
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 
 	"github.com/oriyn-ai/cli/internal/auth"
+	"github.com/oriyn-ai/cli/internal/oauth"
 	"github.com/oriyn-ai/cli/internal/telemetry"
 )
 
@@ -27,7 +23,9 @@ type loginTracker interface {
 }
 
 type callbackResult struct {
-	token string
+	code  string
+	state string
+	err   string
 }
 
 func newLoginCmd(app *App) *cobra.Command {
@@ -36,26 +34,36 @@ func newLoginCmd(app *App) *cobra.Command {
 		Use:   "login",
 		Short: "Authenticate with Oriyn via browser login",
 		Long: "Starts a local callback server and opens the browser for Clerk " +
-			"sign-in. Use --no-browser on headless machines or remote shells — " +
-			"the URL will be printed for you to open manually.\n\n" +
+			"sign-in over OAuth 2.0 + PKCE. Use --no-browser on headless " +
+			"machines or remote shells — the URL will be printed for you to " +
+			"open manually.\n\n" +
 			"For non-interactive CI/agent environments, set ORIYN_ACCESS_TOKEN " +
-			"to a Clerk JWT instead of running `oriyn login`.",
+			"to a Clerk OAuth access token instead of running `oriyn login`.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLogin(cmd.Context(), app.WebBase, app.APIBase, app.AuthStore, app.Tracker, noBrowser, cmd.OutOrStdout())
+			return runLogin(cmd.Context(), app.OAuth, app.AuthStore, app.Tracker, noBrowser, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Print the login URL instead of trying to open a browser")
 	return cmd
 }
 
-func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Store, tracker loginTracker, noBrowser bool, w io.Writer) error {
+func runLogin(ctx context.Context, oauthCfg oauth.Config, authStore *auth.Store, tracker loginTracker, noBrowser bool, w io.Writer) error {
 	trackState(tracker, telemetry.LoginStateStarted)
 
-	stateParam := uuid.NewString()
-	callbackCh := make(chan callbackResult, 1)
+	pkce, err := oauth.GeneratePKCE()
+	if err != nil {
+		trackState(tracker, telemetry.LoginStateFailed)
+		return err
+	}
+	state, err := oauth.GenerateState()
+	if err != nil {
+		trackState(tracker, telemetry.LoginStateFailed)
+		return err
+	}
 
+	callbackCh := make(chan callbackResult, 1)
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /callback", makeCallbackHandler(stateParam, callbackCh))
+	mux.HandleFunc("GET /callback", makeCallbackHandler(state, callbackCh))
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -68,12 +76,13 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 	go func() { _ = server.Serve(listener) }()
 	defer func() { _ = server.Shutdown(context.Background()) }()
 
-	loginURL := fmt.Sprintf("%s/auth/cli/login?port=%d&state=%s", webBase, port, stateParam)
+	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", port)
+	authorizeURL := oauthCfg.BuildAuthorizeURL(state, pkce.Challenge, redirectURI)
 
 	if noBrowser {
-		fmt.Fprintf(w, "Open this URL to log in:\n\n  %s\n\n", loginURL)
-	} else if err := browser.OpenURL(loginURL); err != nil {
-		fmt.Fprintf(w, "Could not open a browser. Open this URL manually:\n\n  %s\n\n", loginURL)
+		fmt.Fprintf(w, "Open this URL to log in:\n\n  %s\n\n", authorizeURL)
+	} else if err := browser.OpenURL(authorizeURL); err != nil {
+		fmt.Fprintf(w, "Could not open a browser. Open this URL manually:\n\n  %s\n\n", authorizeURL)
 	} else {
 		fmt.Fprintln(w, "Opening browser to log in...")
 		trackState(tracker, telemetry.LoginStateBrowserOpened)
@@ -84,53 +93,47 @@ func runLogin(ctx context.Context, webBase, apiBase string, authStore *auth.Stor
 	select {
 	case cb := <-callbackCh:
 		trackState(tracker, telemetry.LoginStateCallbackReceived)
-
-		if cb.token == "" {
+		if cb.err != "" {
 			trackState(tracker, telemetry.LoginStateFailed)
-			return fmt.Errorf("login callback returned no token — your CLI is likely out of date for this server. Re-run install.sh to update")
+			return fmt.Errorf("authorization failed: %s", cb.err)
+		}
+		if cb.code == "" {
+			trackState(tracker, telemetry.LoginStateFailed)
+			return fmt.Errorf("authorization code missing from callback — sign-in did not complete")
 		}
 
-		expiresAt, err := jwtExpirySeconds(cb.token)
+		tr, err := oauthCfg.ExchangeCode(ctx, nil, cb.code, pkce.Verifier, redirectURI)
 		if err != nil {
-			// Fall back to a 24h assumption if parsing fails — matches the
-			// recommended `cli` template lifetime. The API rejects on real
-			// expiry, which forces a re-login anyway.
-			expiresAt = time.Now().Unix() + 24*60*60
+			trackState(tracker, telemetry.LoginStateFailed)
+			return fmt.Errorf("exchanging code: %w", err)
 		}
 
 		creds := &auth.Credentials{
-			AccessToken: cb.token,
-			ExpiresAt:   expiresAt,
+			AccessToken:  tr.AccessToken,
+			RefreshToken: tr.RefreshToken,
+			ExpiresAt:    time.Now().Unix() + tr.ExpiresIn,
 		}
-
-		// Verify the token reaches the API before persisting. Saving first
-		// then probing risks caching a useless token (the exact failure mode
-		// of the v0.4.0 → v0.5.0 callback-shape skew). A network error is
-		// not authoritative — we still save and let the user retry later.
-		me, fetchErr := fetchMe(ctx, apiBase, creds.AccessToken)
-		var rejected *authRejectedError
-		if errors.As(fetchErr, &rejected) {
-			trackState(tracker, telemetry.LoginStateFailed)
-			return fmt.Errorf("API rejected the token (status %d) — your CLI is likely out of date for this server. Re-run install.sh to update", rejected.statusCode)
-		}
-
 		if err := authStore.Save(creds); err != nil {
 			trackState(tracker, telemetry.LoginStateFailed)
 			return err
 		}
 
-		if me != nil {
+		// /userinfo failure is non-fatal — the access token is valid; we
+		// just don't have a friendly email to print. Better to ship the
+		// happy path than block on a side-channel call.
+		ui, err := oauthCfg.FetchUserInfo(ctx, nil, creds.AccessToken)
+		if err == nil && ui != nil {
 			trackState(tracker, telemetry.LoginStateProfileFetched)
-			if me.userID != "" && tracker != nil {
-				tracker.Identify(me.userID, nil)
+			if ui.Sub != "" && tracker != nil {
+				tracker.Identify(ui.Sub, nil)
 			}
-			if me.email != "" {
-				fmt.Fprintf(w, "Logged in as %s\n", me.email)
+			if ui.Email != "" {
+				fmt.Fprintf(w, "Logged in as %s\n", ui.Email)
 			} else {
 				fmt.Fprintln(w, "Logged in successfully.")
 			}
 		} else {
-			fmt.Fprintln(w, "Logged in (could not reach the API to verify profile — token saved).")
+			fmt.Fprintln(w, "Logged in successfully.")
 		}
 
 		trackState(tracker, telemetry.LoginStateSucceeded)
@@ -150,81 +153,23 @@ func trackState(t loginTracker, state telemetry.LoginState) {
 	}
 }
 
-type meInfo struct {
-	userID string
-	email  string
-}
-
-// authRejectedError signals that the API explicitly rejected the token
-// (401/403). It is distinct from a network/transport error so callers can
-// refuse to persist a token the server has already disowned, while still
-// being lenient when /v1/me is simply unreachable.
-type authRejectedError struct {
-	statusCode int
-}
-
-func (e *authRejectedError) Error() string {
-	return fmt.Sprintf("API rejected token (status %d)", e.statusCode)
-}
-
-func fetchMe(ctx context.Context, apiBase, token string) (*meInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBase+"/v1/me", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return nil, &authRejectedError{statusCode: resp.StatusCode}
-	}
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("API returned %d", resp.StatusCode)
-	}
-
-	var data struct {
-		UserID string `json:"user_id"`
-		Email  string `json:"email"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, err
-	}
-	return &meInfo{userID: data.UserID, email: data.Email}, nil
-}
-
-// jwtExpirySeconds extracts the `exp` claim from a JWT without verifying the
-// signature. We don't need to verify here — the API verifies on every request
-// and rejects forged or tampered tokens. The CLI just needs `exp` to know
-// when to prompt for re-login.
-func jwtExpirySeconds(token string) (int64, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return 0, fmt.Errorf("not a JWT")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return 0, fmt.Errorf("decode payload: %w", err)
-	}
-	var claims struct {
-		Exp int64 `json:"exp"`
-	}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return 0, fmt.Errorf("parse payload: %w", err)
-	}
-	if claims.Exp == 0 {
-		return 0, fmt.Errorf("no exp claim")
-	}
-	return claims.Exp, nil
-}
-
 func makeCallbackHandler(expectedState string, ch chan<- callbackResult) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
+
+		if errCode := q.Get("error"); errCode != "" {
+			desc := q.Get("error_description")
+			if desc == "" {
+				desc = errCode
+			}
+			ch <- callbackResult{err: desc}
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprintf(w, `<html><body style="font-family:system-ui;text-align:center;padding:4rem">`+
+				`<h1>Authentication failed</h1>`+
+				`<p>%s</p>`+
+				`</body></html>`, htmlEscape(desc))
+			return
+		}
 
 		if q.Get("state") != expectedState {
 			w.Header().Set("Content-Type", "text/html")
@@ -232,30 +177,46 @@ func makeCallbackHandler(expectedState string, ch chan<- callbackResult) http.Ha
 			return
 		}
 
-		token := q.Get("token")
-		// Render success only when a token is actually present. An empty
-		// token here means the web app sent a callback shape this binary
-		// doesn't understand (typical version-skew failure). Rendering
-		// "successful" anyway is the bug that masked the v0.4.0 → v0.5.0
-		// migration; refuse the page and signal the failure to runLogin.
-		if token == "" {
-			ch <- callbackResult{token: ""}
+		code := q.Get("code")
+		if code == "" {
+			ch <- callbackResult{}
 			w.Header().Set("Content-Type", "text/html")
 			fmt.Fprint(w, `<html><body style="font-family:system-ui;text-align:center;padding:4rem">`+
 				`<h1>Authentication failed</h1>`+
-				`<p>The login callback did not include a token. Your CLI is likely out of date for this server.</p>`+
-				`<p>Re-run the installer and try again:</p>`+
-				`<pre>curl -fsSL https://raw.githubusercontent.com/oriyn-ai/cli/main/install.sh | bash</pre>`+
+				`<p>The authorization server didn't return a code. Please try again.</p>`+
 				`</body></html>`)
 			return
 		}
 
-		ch <- callbackResult{token: token}
-
+		ch <- callbackResult{code: code, state: q.Get("state")}
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, `<html><body style="font-family:system-ui;text-align:center;padding:4rem">`+
 			`<h1>Authentication successful</h1>`+
 			`<p>You may close this page and return to your terminal.</p>`+
 			`</body></html>`)
 	}
+}
+
+// htmlEscape is a tiny sanitizer for the inline error description. We
+// don't need full HTML escaping coverage — just enough that an attacker-
+// supplied error_description can't inject markup into the success page.
+func htmlEscape(s string) string {
+	out := make([]byte, 0, len(s))
+	for _, c := range []byte(s) {
+		switch c {
+		case '<':
+			out = append(out, []byte("&lt;")...)
+		case '>':
+			out = append(out, []byte("&gt;")...)
+		case '&':
+			out = append(out, []byte("&amp;")...)
+		case '"':
+			out = append(out, []byte("&quot;")...)
+		case '\'':
+			out = append(out, []byte("&#39;")...)
+		default:
+			out = append(out, c)
+		}
+	}
+	return string(out)
 }

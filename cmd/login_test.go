@@ -2,17 +2,17 @@ package cmd
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/oriyn-ai/cli/internal/auth"
+	"github.com/oriyn-ai/cli/internal/oauth"
 	"github.com/oriyn-ai/cli/internal/telemetry"
 )
 
@@ -51,16 +51,8 @@ type nullTracker struct{}
 func (nullTracker) Identify(string, map[string]any)            {}
 func (nullTracker) TrackLoginState(state telemetry.LoginState) {}
 
-func makeFakeJWT(t *testing.T, exp int64) string {
-	t.Helper()
-	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
-	payload, _ := json.Marshal(map[string]any{"exp": exp})
-	return header + "." + base64.RawURLEncoding.EncodeToString(payload) + ".sig"
-}
-
-// teeWriter is a writer the test goroutine can both read from and let runLogin
-// write into. It buffers output and signals new data on a channel so the URL
-// watcher doesn't have to poll on a fixed interval.
+// teeWriter buffers runLogin's output and signals new data on a channel so
+// the test goroutine can extract the authorize URL the moment it appears.
 type teeWriter struct {
 	mu  sync.Mutex
 	buf strings.Builder
@@ -86,63 +78,96 @@ func (t *teeWriter) String() string {
 	return t.buf.String()
 }
 
-func waitForLoginURL(t *testing.T, w *teeWriter) (state, port string) {
+func waitForAuthorizeURL(t *testing.T, w *teeWriter) (state, redirectURI string) {
 	t.Helper()
 	deadline := time.After(3 * time.Second)
 	for {
 		for _, line := range strings.Split(w.String(), "\n") {
 			line = strings.TrimSpace(line)
-			if !strings.Contains(line, "port=") || !strings.Contains(line, "state=") {
+			if !strings.Contains(line, "code_challenge=") || !strings.Contains(line, "state=") {
 				continue
 			}
 			u, err := url.Parse(line)
 			if err != nil {
 				continue
 			}
-			return u.Query().Get("state"), u.Query().Get("port")
+			return u.Query().Get("state"), u.Query().Get("redirect_uri")
 		}
 		select {
 		case <-w.ch:
 		case <-deadline:
-			t.Fatalf("login URL never appeared in output: %q", w.String())
+			t.Fatalf("authorize URL never appeared in output: %q", w.String())
 			return "", ""
 		}
 	}
 }
 
-// driveLogin runs runLogin with noBrowser=true, watches its output for the
-// printed login URL, then fires the callback with callbackQuery+state. The
-// fake API server answers /v1/me with apiStatus.
-func driveLogin(t *testing.T, callbackQuery url.Values, apiStatus int) (out string, saved bool, err error) {
-	t.Helper()
+type loginEnv struct {
+	store          *auth.Store
+	keyring        *fakeKeyring
+	cfg            oauth.Config
+	tokenHits      int32
+	userinfoHits   int32
+	tokenResponder func(w http.ResponseWriter, r *http.Request)
+	userInfoStatus int
+}
 
-	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/me" {
-			http.NotFound(w, r)
+func newLoginEnv(t *testing.T) *loginEnv {
+	t.Helper()
+	env := &loginEnv{
+		userInfoStatus: http.StatusOK,
+	}
+
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&env.tokenHits, 1)
+		if env.tokenResponder != nil {
+			env.tokenResponder(w, r)
 			return
 		}
-		w.WriteHeader(apiStatus)
-		if apiStatus < 400 {
-			_, _ = w.Write([]byte(`{"user_id":"u_test","email":"shipit@oriyn.ai"}`))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"test_access","refresh_token":"test_refresh","expires_in":3600,"token_type":"Bearer","scope":"openid email"}`))
+	}))
+	t.Cleanup(tokenSrv.Close)
+
+	userInfoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&env.userinfoHits, 1)
+		w.WriteHeader(env.userInfoStatus)
+		if env.userInfoStatus < 400 {
+			_, _ = w.Write([]byte(`{"sub":"user_test","email":"shipit@oriyn.ai"}`))
 		}
 	}))
-	defer api.Close()
+	t.Cleanup(userInfoSrv.Close)
 
-	kr := newFakeKeyring()
-	store := auth.NewStoreWithKeyring(kr)
+	env.cfg = oauth.Config{
+		ClientID:     "test_client",
+		AuthorizeURL: "https://auth.invalid/authorize",
+		TokenURL:     tokenSrv.URL,
+		UserInfoURL:  userInfoSrv.URL,
+		Scopes:       []string{"openid", "email"},
+	}
+	env.keyring = newFakeKeyring()
+	env.store = auth.NewStoreWithKeyring(env.keyring, env.cfg)
+	return env
+}
+
+func driveLogin(t *testing.T, env *loginEnv, callbackQuery url.Values) (out string, err error) {
+	t.Helper()
 
 	tw := newTeeWriter()
-
 	go func() {
-		state, port := waitForLoginURL(t, tw)
+		state, redirectURI := waitForAuthorizeURL(t, tw)
 		q := url.Values{}
 		for k, vs := range callbackQuery {
 			for _, v := range vs {
 				q.Add(k, v)
 			}
 		}
-		q.Set("state", state)
-		resp, getErr := http.Get("http://127.0.0.1:" + port + "/callback?" + q.Encode())
+		// Default to a non-empty state matching the one runLogin printed,
+		// unless the test is explicitly overriding it.
+		if q.Get("state") == "" {
+			q.Set("state", state)
+		}
+		resp, getErr := http.Get(redirectURI + "?" + q.Encode())
 		if getErr == nil {
 			_ = resp.Body.Close()
 		}
@@ -151,68 +176,109 @@ func driveLogin(t *testing.T, callbackQuery url.Values, apiStatus int) (out stri
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// webBase is unused on the noBrowser=true path beyond being printed in the
-	// URL — runLogin still embeds it, so any value works.
-	err = runLogin(ctx, "http://web.invalid", api.URL, store, nullTracker{}, true, tw)
+	err = runLogin(ctx, env.cfg, env.store, nullTracker{}, true, tw)
 	out = tw.String()
-
-	if _, kerr := kr.Get("oriyn-cli", "credentials"); kerr == nil {
-		saved = true
-	}
-	return out, saved, err
+	return out, err
 }
 
-// Empty token in callback (the v0.4.0 → v0.5.0 skew shape) must NOT save creds
-// and must NOT report success.
-func TestRunLogin_EmptyTokenInCallbackFailsLoudly(t *testing.T) {
-	q := url.Values{} // no token, no access_token, nothing
-	out, saved, err := driveLogin(t, q, http.StatusOK)
-	if err == nil {
-		t.Fatalf("expected runLogin to fail with empty token; got success. out=%q", out)
-	}
-	if !strings.Contains(err.Error(), "no token") {
-		t.Fatalf("expected error to mention missing token, got: %v", err)
-	}
-	if saved {
-		t.Fatalf("creds were saved despite empty token — this is the silent-success regression")
-	}
-}
+// Happy path: code + matching state → exchanged for tokens, persisted, email greeted.
+func TestRunLogin_HappyPath(t *testing.T) {
+	env := newLoginEnv(t)
 
-// API rejecting the token (401/403) must NOT save creds and must surface a
-// clear "out of date" hint, not a generic auth error.
-func TestRunLogin_APIRejectsTokenDoesNotSave(t *testing.T) {
-	exp := time.Now().Add(24 * time.Hour).Unix()
-	jwt := makeFakeJWT(t, exp)
 	q := url.Values{}
-	q.Set("token", jwt)
-
-	out, saved, err := driveLogin(t, q, http.StatusUnauthorized)
-	if err == nil {
-		t.Fatalf("expected runLogin to fail when API returned 401; got success. out=%q", out)
-	}
-	if !strings.Contains(err.Error(), "rejected") {
-		t.Fatalf("expected error to mention API rejection, got: %v", err)
-	}
-	if saved {
-		t.Fatal("creds were saved despite API rejection")
-	}
-}
-
-// Happy path: valid token + 200 from /v1/me saves creds and prints the email.
-func TestRunLogin_HappyPathSavesAndGreets(t *testing.T) {
-	exp := time.Now().Add(24 * time.Hour).Unix()
-	jwt := makeFakeJWT(t, exp)
-	q := url.Values{}
-	q.Set("token", jwt)
-
-	out, saved, err := driveLogin(t, q, http.StatusOK)
+	q.Set("code", "test_authcode")
+	out, err := driveLogin(t, env, q)
 	if err != nil {
 		t.Fatalf("expected runLogin to succeed; got %v. out=%q", err, out)
 	}
-	if !saved {
+
+	if _, getErr := env.keyring.Get("oriyn-cli", "credentials"); getErr != nil {
 		t.Fatal("creds were not saved on happy path")
 	}
 	if !strings.Contains(out, "shipit@oriyn.ai") {
 		t.Fatalf("expected email in output, got %q", out)
+	}
+	if got := atomic.LoadInt32(&env.tokenHits); got != 1 {
+		t.Fatalf("expected 1 token endpoint hit, got %d", got)
+	}
+}
+
+// OAuth-style error in the callback (?error=access_denied) must NOT save creds.
+func TestRunLogin_OAuthErrorInCallback(t *testing.T) {
+	env := newLoginEnv(t)
+
+	q := url.Values{}
+	q.Set("error", "access_denied")
+	q.Set("error_description", "user declined")
+	out, err := driveLogin(t, env, q)
+	if err == nil {
+		t.Fatalf("expected runLogin to fail; got success. out=%q", out)
+	}
+	if !strings.Contains(err.Error(), "user declined") && !strings.Contains(err.Error(), "access_denied") {
+		t.Fatalf("expected error to surface OAuth description, got: %v", err)
+	}
+	if _, getErr := env.keyring.Get("oriyn-cli", "credentials"); getErr == nil {
+		t.Fatal("creds were saved despite OAuth error")
+	}
+}
+
+// Missing code in the callback (state matches but code absent) is a hard fail.
+func TestRunLogin_MissingCodeInCallback(t *testing.T) {
+	env := newLoginEnv(t)
+
+	q := url.Values{} // no code, no error
+	out, err := driveLogin(t, env, q)
+	if err == nil {
+		t.Fatalf("expected runLogin to fail without code; got success. out=%q", out)
+	}
+	if !strings.Contains(err.Error(), "code missing") {
+		t.Fatalf("expected error to mention missing code, got: %v", err)
+	}
+	if _, getErr := env.keyring.Get("oriyn-cli", "credentials"); getErr == nil {
+		t.Fatal("creds were saved despite missing code")
+	}
+	if got := atomic.LoadInt32(&env.tokenHits); got != 0 {
+		t.Fatalf("expected no token exchange when code missing, got %d hits", got)
+	}
+}
+
+// Token endpoint rejects the code → no creds saved, clear error.
+func TestRunLogin_TokenEndpointRejects(t *testing.T) {
+	env := newLoginEnv(t)
+	env.tokenResponder = func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"invalid_grant","error_description":"code expired"}`))
+	}
+
+	q := url.Values{}
+	q.Set("code", "expired_code")
+	out, err := driveLogin(t, env, q)
+	if err == nil {
+		t.Fatalf("expected runLogin to fail when token endpoint rejects; got success. out=%q", out)
+	}
+	if !strings.Contains(err.Error(), "exchanging code") {
+		t.Fatalf("expected error to mention code exchange, got: %v", err)
+	}
+	if _, getErr := env.keyring.Get("oriyn-cli", "credentials"); getErr == nil {
+		t.Fatal("creds were saved despite token-endpoint rejection")
+	}
+}
+
+// /userinfo failing must NOT block login — the access token is valid.
+func TestRunLogin_UserinfoFailureIsNonFatal(t *testing.T) {
+	env := newLoginEnv(t)
+	env.userInfoStatus = http.StatusServiceUnavailable
+
+	q := url.Values{}
+	q.Set("code", "test_authcode")
+	out, err := driveLogin(t, env, q)
+	if err != nil {
+		t.Fatalf("expected runLogin to succeed despite userinfo error; got %v. out=%q", err, out)
+	}
+	if _, getErr := env.keyring.Get("oriyn-cli", "credentials"); getErr != nil {
+		t.Fatal("creds were not saved when userinfo failed")
+	}
+	if !strings.Contains(out, "Logged in successfully") {
+		t.Fatalf("expected fallback success message, got %q", out)
 	}
 }
