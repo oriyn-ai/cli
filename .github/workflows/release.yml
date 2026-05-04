@@ -19,6 +19,9 @@ jobs:
           bun-version: latest
       - uses: actions/setup-node@v4
         with:
+          # npm 11.5+ auto-detects GitHub OIDC when `id-token: write` is set
+          # and a Trusted Publisher is configured for this package on npmjs.com.
+          # No NPM_TOKEN secret needed.
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
       - run: bun install --frozen-lockfile
@@ -27,10 +30,8 @@ jobs:
       - run: bun test
       - name: Build npm bundle
         run: bun build src/index.ts --target=bun --format=esm --outfile=dist/index.js --minify
-      - name: Publish to npm with provenance
+      - name: Publish to npm via OIDC trusted publishing
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   binaries:
     runs-on: ubuntu-latest
