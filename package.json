@@ -1,6 +1,6 @@
 {
   "name": "oriyn",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Oriyn CLI — predict how users respond to product changes before shipping.",
   "type": "module",
   "bin": {

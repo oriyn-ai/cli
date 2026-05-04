@@ -19,11 +19,12 @@ jobs:
           bun-version: latest
       - uses: actions/setup-node@v4
         with:
-          # npm 11.5+ auto-detects GitHub OIDC when `id-token: write` is set
-          # and a Trusted Publisher is configured for this package on npmjs.com.
-          # No NPM_TOKEN secret needed.
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
+      # OIDC trusted publishing for `npm publish` requires npm 11.5+. Node 22
+      # ships npm 10.x, so we upgrade explicitly. Without this, npm silently
+      # falls back to token auth, sends no token, and the registry returns 404.
+      - run: npm install -g npm@latest
       - run: bun install --frozen-lockfile
       - run: bun x biome check .
       - run: bunx tsc --noEmit
