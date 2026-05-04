@@ -9,11 +9,26 @@
   "files": [
     "dist",
     "src",
-    "bin"
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "bun": ">=1.2.0"
   },
+  "keywords": [
+    "oriyn",
+    "cli",
+    "experiments",
+    "personas",
+    "product-analytics",
+    "ab-testing",
+    "agent",
+    "ai",
+    "claude-code",
+    "codex",
+    "bun"
+  ],
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "bun build src/index.ts --target=bun --format=esm --outfile=dist/index.js --minify",
@@ -51,8 +66,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/oriyn-ai/cli.git"
+    "url": "git+https://github.com/oriyn-ai/cli.git"
   },
-  "license": "UNLICENSED",
-  "private": false
+  "homepage": "https://oriyn.ai",
+  "bugs": {
+    "url": "https://github.com/oriyn-ai/cli/issues"
+  },
+  "author": "Pontis Inc. <shivam@oriyn.ai>",
+  "license": "Apache-2.0"
 }
