@@ -1,207 +1,114 @@
-# Oriyn CLI
+# oriyn CLI
 
-> Predict how users will respond to a change before you ship it.
+Predict how users respond to product changes before shipping — from your terminal or any AI agent.
 
-Oriyn builds persona-grounded simulations from real user behavior so you can
-test a UI change, a pricing tweak, or a new onboarding flow *before* writing
-the code. The CLI is the primary way coding agents (Claude Code, Codex) and
-humans run experiments from a terminal or CI pipeline.
+The CLI is built around a single headline command:
 
-This repo is a thin Go client over `oriyn-api` — all business logic lives there.
+```
+oriyn experiments run "Should we move pricing before signup?"
+```
 
----
+It auto-resolves the product from a nearby `oriyn.json`, streams progress as JSONL when piped (or shows a spinner in a TTY), and prints a structured verdict with per-persona breakdown.
 
 ## Install
 
-### Quick install (macOS / Linux)
-
 ```bash
 curl -fsSL https://oriyn.ai/install.sh | bash
+# or, with Bun already installed:
+bun add -g oriyn
 ```
 
-### From source
+The CLI requires Bun ≥ 1.2 when installed via npm. The curl installer falls back to a precompiled standalone binary for users without Bun.
+
+## Quickstart
 
 ```bash
-go install github.com/oriyn-ai/cli@latest
+oriyn auth login                           # browser PKCE; tokens at ~/.config/oriyn/credentials.json (0600)
+cd <your repo>
+oriyn link                                 # interactive picker → writes oriyn.json (commit it)
+oriyn experiments run "<your hypothesis>"  # the headline flow
 ```
 
-### From GitHub Releases
+`oriyn.json` lives at the project root and is shared with your team. The CLI walks up from `cwd` to find it (just like `package.json`), so monorepos with multiple linked products work out of the box.
 
-Grab the right binary from the [latest release](https://github.com/oriyn-ai/cli/releases/latest),
-make it executable, put it on your `PATH`.
+## Commands
 
-### Uninstall
+```
+oriyn auth login [--no-browser]      Log in via browser (OAuth 2.1 + PKCE)
+oriyn auth logout                    Forget stored credentials
+oriyn auth whoami                    Show the logged-in account
+oriyn auth status                    Token validity + expiry
 
-One command, reverses everything `install.sh` and the CLI itself put on disk:
+oriyn link                           Interactive product picker → oriyn.json
+oriyn link --product <id>            Non-interactive
+oriyn unlink                         Remove oriyn.json from cwd
+
+oriyn products                       List products in the org
+oriyn personas                       List behavioral personas
+oriyn personas <id>                  Persona detail (profile + facts)
+oriyn patterns                       Mined hypotheses + bottlenecks
+oriyn experiments                    List experiments
+oriyn experiments <id>               Get one experiment
+oriyn experiments run "<hypothesis>" Run experiment, stream progress
+
+oriyn sync                           Idempotent synthesize → enrich
+oriyn status                         One-screen diagnostic
+oriyn config [key] [value]           Show or update CLI config
+oriyn open [resource]                Open the web app for the linked product
+oriyn upgrade                        Upgrade via bun add -g oriyn@latest
+oriyn completion <bash|zsh|fish>     Print shell completion script
+```
+
+## Agent flow (CI / Claude Code / Codex)
+
+For sandboxed agents, set one env var and commit `oriyn.json`:
 
 ```bash
-oriyn uninstall            # confirms first; clears keychain, config, skill, binary
-oriyn uninstall --dry-run  # preview without removing
-oriyn uninstall -y         # non-interactive (CI / scripts)
+export ORIYN_ACCESS_TOKEN=<token>          # from app.oriyn.ai → Settings
+oriyn experiments run "<hypothesis>"       # streams JSONL to stdout
 ```
 
-Flags `--keep-config`, `--keep-skill`, and `--keep-binary` opt individual targets out.
-
-If the binary is already gone (or you installed via `curl | bash` and want to use
-the same path):
-
-```bash
-curl -fsSL https://oriyn.ai/install.sh | bash -s -- --uninstall
-```
-
----
-
-## Authenticate
-
-```bash
-oriyn login                 # interactive browser OAuth
-oriyn login --no-browser    # headless — prints the URL to open manually
-```
-
-Tokens are stored in the OS keychain (macOS Keychain / Windows Credential Manager
-/ libsecret on Linux). For non-interactive contexts (CI, coding agents, remote
-shells), set `ORIYN_ACCESS_TOKEN` and skip `login` entirely.
-
-```bash
-oriyn whoami
-oriyn doctor        # checks auth + API reachability (exits non-zero on failure)
-```
-
----
-
-## Core workflow: run an experiment before shipping a change
-
-This is why the CLI exists.
-
-```bash
-# 1. Find the product
-oriyn products list
-
-# 2. Run the experiment — blocks until complete, emits JSON
-oriyn experiment run \
-  --product $PRODUCT_ID \
-  --hypothesis "Move the trial CTA above the fold on /pricing" \
-  --json
-
-# Or pipe the hypothesis for longer proposals
-cat proposal.md | oriyn experiment run --product $PRODUCT_ID --hypothesis-stdin --json
-```
-
-The JSON payload is the full `ExperimentResponse`:
+The CLI infers JSONL mode from non-TTY stdout. Each line is an event:
 
 ```json
-{
-  "id": "…",
-  "status": "complete",
-  "summary": {
-    "verdict": "ship" | "revise" | "reject",
-    "convergence": 0.84,
-    "summary": "…",
-    "persona_breakdown": [
-      {"persona": "Power users", "response": "strong_positive", "adoption_rate": 0.72, "reasoning": "…"}
-    ],
-    "question_results": { … },
-    "agent_count": 50
-  }
-}
+{"type":"step","name":"create-experiment","ts":"…"}
+{"type":"progress","message":"status: running","ts":"…"}
+{"type":"result","data":{ "summary": { "verdict": "ship", "convergence": 0.86, "persona_breakdown": [ … ] } }}
 ```
 
-Agents branch on `summary.verdict` to decide whether to proceed with the
-implementation. `convergence` below ~0.6 means the personas disagree — treat
-the verdict as low-confidence and widen the proposal.
+Exit codes: `0` ok · `2` api · `3` auth · `4` network · `5` permission · `1` other.
 
----
+## Configuration
 
-## Command reference
+| Path | Purpose |
+|------|---------|
+| `~/.config/oriyn/credentials.json` | Auth tokens (`0600`) |
+| `~/.config/oriyn/config.json` | CLI prefs (telemetry, default product) |
+| `<repo>/oriyn.json` | Project link `{ orgId, productId }` (commit it) |
 
-| Command | Purpose |
-|---|---|
-| `oriyn login` / `logout` / `whoami` | Auth (OAuth + keychain) |
-| `oriyn doctor` | Verify env, auth, API reachability |
-| `oriyn products list` / `ls` | List products in your org |
-| `oriyn products get --product-id <id>` | Product details |
-| `oriyn products context show / edit / history / version` | Inspect + edit synthesized context |
-| `oriyn products scrape --product-id <id> --source-id <sid>` | Kick off a Firecrawl scrape of a source |
-| `oriyn synthesize --product-id <id> [--wait]` | Trigger product-context synthesis |
-| `oriyn enrich --product-id <id> [--wait]` | Trigger persona enrichment |
-| `oriyn personas --product-id <id>` | Behavioral personas |
-| `oriyn personas profile --product-id <id> --persona-id <pid>` | Supermemory-derived persona facts |
-| `oriyn personas citations --product-id <id> --persona-id <pid> --trait-index N` | Evidence sessions for a trait |
-| `oriyn hypotheses --product-id <id>` | Testable sequences mined from events |
-| `oriyn knowledge search --product-id <id> --query "…"` | Semantic search over product knowledge graph |
-| `oriyn timeline --product-id <id> --user-id <uid>` | Cross-provider timeline for one resolved user |
-| `oriyn replay --product-id <id> --session-asset-id <sid>` | Raw rrweb events for a session |
-| `oriyn experiment run / list / get / archive` | Simulation lifecycle |
-| `oriyn telemetry --enable / --disable / --status` | Anonymous usage telemetry |
+Override with env vars:
 
-Every read-only command supports `--json`.
+| Env | Effect |
+|-----|--------|
+| `ORIYN_ACCESS_TOKEN` | Skip credentials file (CI escape hatch) |
+| `ORIYN_API_BASE` | Override API base URL |
+| `ORIYN_PRODUCT` / `ORIYN_ORG` | Override link resolution |
+| `ORIYN_CONFIG_DIR` | Move the global config dir |
+| `ORIYN_TELEMETRY=off` | Disable PostHog usage events |
+| `NO_COLOR=1` | Disable colors |
+| `FORCE_COLOR=1` | Enforce colors when piped |
 
----
-
-## Agent mode
-
-Three equivalent ways to switch the CLI into machine-readable mode:
-
-1. `--json` on any command that supports it.
-2. `--quiet` on the root (suppresses color, progress dots, headers).
-3. `ORIYN_AGENT=1` in the environment (implies the above globally).
-
-Exit codes so agents can branch without parsing messages:
-
-| Code | Meaning |
-|---|---|
-| `0` | Success |
-| `1` | User error (flag misuse, missing required input) |
-| `2` | API returned 4xx/5xx — inspect the `error` field in stderr |
-| `3` | Not logged in or session expired |
-| `4` | Could not reach the API |
-
-Error responses from the API are preserved: `402 insufficient_credits` returns
-`credits_required` / `credits_available` / `plan`; `403 agent_count_exceeded`
-returns `max_agent_count`. Agents can read these to self-correct (reduce
-`--agents` or surface a billing prompt).
-
----
-
-## Environment variables
-
-| Variable | Purpose |
-|---|---|
-| `ORIYN_ACCESS_TOKEN` | Bypass keychain; use this token directly (CI/agent escape hatch) |
-| `ORIYN_API_BASE` | Override API base URL (default `https://api.oriyn.ai`) |
-| `ORIYN_WEB_BASE` | Override web app URL (default `https://app.oriyn.ai`) |
-| `ORIYN_AGENT` | Set to `1` to force agent mode globally |
-| `ORIYN_TELEMETRY` | Set to `0` / `false` / `off` to disable anonymous usage telemetry |
-
----
-
-## For coding agents
-
-If you're Claude Code or Codex, install the Oriyn skill so decision triggers
-and worked examples are available on demand:
+## Develop
 
 ```bash
-# Once the CLI is installed, one command does auth + skill + health check
-oriyn init
-
-# Or install just the skill:
-oriyn skill install             # → ~/.claude/skills/oriyn
-oriyn skill install --path .    # into the current repo
-
-# Or use the skills.sh package manager, which reads from GitHub directly
-npx skills add oriyn-ai/cli
+git clone git@github.com:oriyn-ai/cli.git && cd cli
+bun install
+bun test
+bun run src/index.ts --help
 ```
 
-See [`skills/oriyn/SKILL.md`](./skills/oriyn/SKILL.md) in this repo for the
-full skill source. The skill files are also embedded in the `oriyn` binary,
-so `oriyn skill install` works offline.
+Workflow: `bun test` (unit), `bun x biome check .` (lint+format), `bunx tsc --noEmit` (typecheck), `bun run scripts/build-binaries.ts` (cross-compile).
 
----
+## License
 
-## Development
-
-```bash
-go build ./...      # compile
-go test ./...       # run tests
-go vet ./...        # lint
-```
+Pre-launch / not yet licensed.
