@@ -1,0 +1,58 @@
+{
+  "name": "oriyn",
+  "version": "0.1.0",
+  "description": "Oriyn CLI — predict how users respond to product changes before shipping.",
+  "type": "module",
+  "bin": {
+    "oriyn": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "src",
+    "bin"
+  ],
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --target=bun --format=esm --outfile=dist/index.js --minify",
+    "build:bin": "bun build src/index.ts --compile --outfile=dist/oriyn",
+    "build:bin:all": "bun run scripts/build-binaries.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "@sentry/bun": "^9.0.0",
+    "boxen": "^8.0.1",
+    "commander": "14.0.3",
+    "ky": "^1.7.5",
+    "oauth4webapi": "^3.5.0",
+    "open": "^10.1.0",
+    "ora": "^8.2.0",
+    "picocolors": "^1.1.1",
+    "posthog-node": "^4.18.0",
+    "uuid": "^11.0.5",
+    "write-file-atomic": "^6.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.0",
+    "@types/bun": "^1.2.0",
+    "@types/write-file-atomic": "^4.0.3",
+    "typescript": "^5.7.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/oriyn-ai/cli.git"
+  },
+  "license": "UNLICENSED",
+  "private": false
+}

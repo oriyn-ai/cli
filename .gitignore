@@ -1,12 +1,26 @@
-# Go binary
-/oriyn
+node_modules/
 dist/
+.cache/
 
-# Editor
-*.swp
-*.swo
-*~
+# OS / editor
 .DS_Store
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 *.iml
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Test artifacts
+coverage/
+
+# Project link file in this repo's own root (we don't link the CLI repo to itself)
+/oriyn.json
+
+# Bun's local SEA build output
+/oriyn
