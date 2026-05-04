@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # Keep GitHub Actions versions current (action runners change rarely; weekly).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope
+
+  # Keep npm dependencies current. Group all bumps into a single PR per week
+  # so we don't get 13 PRs every Monday.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    groups:
+      production:
+        dependency-type: production
+        update-types:
+          - patch
+          - minor
+          - major
+      dev:
+        dependency-type: development
+        update-types:
+          - patch
+          - minor
+          - major

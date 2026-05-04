@@ -19,10 +19,10 @@ jobs:
           bun-version: latest
       - uses: actions/setup-node@v4
         with:
-          # Node 24 ships npm 11.x. Trusted Publishers (tokenless OIDC publish)
-          # needs npm 11.5+; Node 22's bundled npm 10 silently falls back to
-          # token auth and the registry returns a misleading 404.
-          node-version: 24
+          # 'lts/*' = current Node LTS, which ships current npm. Trusted
+          # Publishers needs npm 11.5+; LTS 24+ has it. Use '*' instead if
+          # you want the absolute newest Node (including non-LTS).
+          node-version: 'lts/*'
           registry-url: 'https://registry.npmjs.org'
       - run: bun install --frozen-lockfile
       - run: bun x biome check .
