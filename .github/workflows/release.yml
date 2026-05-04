@@ -17,7 +17,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           # 'lts/*' = current Node LTS, which ships current npm. Trusted
           # Publishers needs npm 11.5+; LTS 24+ has it. Use '*' instead if
