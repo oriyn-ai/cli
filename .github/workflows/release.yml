@@ -19,12 +19,11 @@ jobs:
           bun-version: latest
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Node 24 ships npm 11.x. Trusted Publishers (tokenless OIDC publish)
+          # needs npm 11.5+; Node 22's bundled npm 10 silently falls back to
+          # token auth and the registry returns a misleading 404.
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
-      # OIDC trusted publishing for `npm publish` requires npm 11.5+. Node 22
-      # ships npm 10.x, so we upgrade explicitly. Without this, npm silently
-      # falls back to token auth, sends no token, and the registry returns 404.
-      - run: npm install -g npm@latest
       - run: bun install --frozen-lockfile
       - run: bun x biome check .
       - run: bunx tsc --noEmit
