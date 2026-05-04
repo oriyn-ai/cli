@@ -124,11 +124,11 @@ export class ApiClient {
   async createExperiment(
     productId: string,
     body: { hypothesis: string; agent_count?: number },
-  ): Promise<{ experimentId: string }> {
+  ): Promise<{ experimentId: string; url: string }> {
     const parsed = createExperimentResponseSchema.parse(
       await this.http.post(`products/${productId}/experiments`, { json: body }).json(),
     );
-    return { experimentId: parsed.experiment_id };
+    return { experimentId: parsed.experiment_id, url: parsed.url };
   }
 
   async startSynthesis(productId: string): Promise<{ status: string }> {

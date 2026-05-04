@@ -146,6 +146,7 @@ export type ExperimentListItem = z.infer<typeof experimentListItemSchema>;
 
 export const createExperimentResponseSchema = z.object({
   experiment_id: z.string(),
+  url: z.string().url(),
 });
 
 export const statusResponseSchema = z.object({

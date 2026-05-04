@@ -82,6 +82,16 @@ export const registerExperiments = (program: Command): void => {
           ...(opts.agents ? { agent_count: opts.agents } : {}),
         });
 
+        if (resolveMode() === 'jsonl') {
+          emitter.emit({
+            type: 'info',
+            message: 'experiment created',
+            data: { id: created.experimentId, url: created.url },
+          });
+        } else {
+          process.stdout.write(`${ui.dim('View:')} ${created.url}\n`);
+        }
+
         spinner.update('Running simulation…');
         let last = await app.api.getExperiment(productId, created.experimentId);
         if (resolveMode() === 'jsonl') {
@@ -113,7 +123,7 @@ export const registerExperiments = (program: Command): void => {
         );
 
         if (resolveMode() === 'jsonl') {
-          emitter.result(last);
+          emitter.result({ ...last, url: created.url });
           return;
         }
         if (last.summary) {
@@ -125,6 +135,7 @@ export const registerExperiments = (program: Command): void => {
             );
           }
         }
+        process.stdout.write(`\n${ui.dim('View:')} ${created.url}\n`);
       } catch (err) {
         spinner.fail();
         reportAndExit(err);
