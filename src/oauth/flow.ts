@@ -47,6 +47,7 @@ const noClientAuth: oauth.ClientAuth = oauth.None();
 
 export interface ExchangeCodeInput {
   code: string;
+  state: string;
   codeVerifier: string;
   redirectUri: string;
 }
@@ -54,17 +55,19 @@ export interface ExchangeCodeInput {
 export const exchangeCode = async (input: ExchangeCodeInput): Promise<TokenSet> => {
   const as = asAuthServer();
   const c = client();
+  // oauth4webapi v3 requires callbackParameters to be the URLSearchParams
+  // returned by validateAuthResponse(); a hand-built one is rejected at
+  // runtime with "must be an instance of URLSearchParams obtained from
+  // validateAuthResponse()". Reconstruct the callback URL and validate it.
+  const callbackUrl = new URL(input.redirectUri);
+  callbackUrl.searchParams.set('code', input.code);
+  callbackUrl.searchParams.set('state', input.state);
+  const params = oauth.validateAuthResponse(as, c, callbackUrl, input.state);
   const response = await oauth.authorizationCodeGrantRequest(
     as,
     c,
     noClientAuth,
-    new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: input.code,
-      redirect_uri: input.redirectUri,
-      client_id: CLERK_OAUTH.clientId,
-      code_verifier: input.codeVerifier,
-    }),
+    params,
     input.redirectUri,
     input.codeVerifier,
   );

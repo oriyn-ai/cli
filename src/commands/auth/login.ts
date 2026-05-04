@@ -41,10 +41,11 @@ export const registerLogin = (auth: Command): void => {
         }
         spinner.start();
 
-        const { code } = await cb.result;
+        const { code, state: returnedState } = await cb.result;
         spinner.update('Exchanging code for tokens…');
         const tokens = await exchangeCode({
           code,
+          state: returnedState,
           codeVerifier,
           redirectUri: cb.redirectUri,
         });
