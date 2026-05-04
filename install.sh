@@ -1,184 +1,70 @@
 #!/usr/bin/env bash
+# Oriyn CLI installer.
+#
+# Tries `bun add -g oriyn` first; falls back to a precompiled binary from the
+# latest GitHub release if Bun is not installed.
+#
+#   curl -fsSL https://oriyn.ai/install.sh | bash
+#
+# Override knobs:
+#   ORIYN_VERSION   — pin a specific tag (default: latest release)
+#   ORIYN_INSTALL_DIR — install dir for the binary fallback (default: $HOME/.local/bin)
+#   ORIYN_REPO      — github repo (default: oriyn-ai/cli)
+
 set -euo pipefail
 
-REPO="oriyn-ai/cli"
-BIN_NAME="oriyn"
-SHARE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/${BIN_NAME}"
-BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
+REPO="${ORIYN_REPO:-oriyn-ai/cli}"
+INSTALL_DIR="${ORIYN_INSTALL_DIR:-$HOME/.local/bin}"
 
-if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
-    BOLD=$'\033[1m'
-    DIM=$'\033[2m'
-    GREEN=$'\033[32m'
-    CYAN=$'\033[36m'
-    RED=$'\033[31m'
-    YELLOW=$'\033[33m'
-    RESET=$'\033[0m'
-else
-    BOLD=""; DIM=""; GREEN=""; CYAN=""; RED=""; YELLOW=""; RESET=""
+log() { printf '%s\n' "$*" >&2; }
+err() { log "error: $*"; exit 1; }
+
+if command -v bun >/dev/null 2>&1; then
+  log "bun detected — installing via 'bun add -g oriyn'"
+  if [[ -n "${ORIYN_VERSION:-}" ]]; then
+    bun add -g "oriyn@${ORIYN_VERSION#v}"
+  else
+    bun add -g oriyn@latest
+  fi
+  log "✓ installed. Run: oriyn auth login"
+  exit 0
 fi
 
-step()    { printf "%s==>%s %s\n" "$CYAN" "$RESET" "$*"; }
-ok()      { printf "%s✓%s %s\n" "$GREEN" "$RESET" "$*"; }
-warn()    { printf "%s!%s %s\n" "$YELLOW" "$RESET" "$*" >&2; }
-fail()    { printf "%s✗%s %s\n" "$RED" "$RESET" "$*" >&2; exit 1; }
+# --- Binary fallback ---
 
-banner() {
-    printf "\n"
-    printf "%s========================================%s\n" "$BOLD" "$RESET"
-    printf "%s          Oriyn CLI Installer%s\n"           "$BOLD" "$RESET"
-    printf "%s========================================%s\n" "$BOLD" "$RESET"
-    printf "\n"
-}
+uname_s=$(uname -s)
+uname_m=$(uname -m)
+case "$uname_s" in
+  Darwin) os=darwin ;;
+  Linux) os=linux ;;
+  *) err "Unsupported OS: $uname_s. Install Bun first: https://bun.com" ;;
+esac
+case "$uname_m" in
+  arm64|aarch64) arch=arm64 ;;
+  x86_64|amd64) arch=x64 ;;
+  *) err "Unsupported architecture: $uname_m" ;;
+esac
 
-tmp=""
-tmp_checksums=""
-cleanup() { rm -f "$tmp" "$tmp_checksums"; }
-trap cleanup EXIT
+mkdir -p "$INSTALL_DIR"
+asset="oriyn-${os}-${arch}"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
 
-detect_target() {
-    local os arch
-    os="$(uname -s)"
-    arch="$(uname -m)"
-
-    case "$os" in
-        Linux)  os="linux" ;;
-        Darwin) os="darwin" ;;
-        *) fail "Unsupported OS: $os. Download manually: https://github.com/${REPO}/releases/latest" ;;
-    esac
-
-    case "$arch" in
-        x86_64|amd64)  arch="amd64" ;;
-        aarch64|arm64) arch="arm64" ;;
-        *) fail "Unsupported architecture: $arch" ;;
-    esac
-
-    printf "%s-%s" "$os" "$arch"
-}
-
-checksum_cmd() {
-    case "$(uname -s)" in
-        Linux)  echo "sha256sum" ;;
-        Darwin) echo "shasum -a 256" ;;
-    esac
-}
-
-resolve_version() {
-    if [ -n "${ORIYN_VERSION:-}" ]; then
-        echo "${ORIYN_VERSION#v}"
-        return
-    fi
-    local location
-    location="$(curl -sI "https://github.com/${REPO}/releases/latest" | grep -i ^location: | tr -d '\r')"
-    echo "$location" | sed 's|.*/v||'
-}
-
-path_hint() {
-    case ":${PATH}:" in
-        *":${BIN_DIR}:"*) return 0 ;;
-    esac
-    warn "${BIN_DIR} is not in your PATH."
-    printf "%s  Add this to your shell profile:%s\n" "$DIM" "$RESET"
-    printf "    export PATH=\"%s:\$PATH\"\n\n" "$BIN_DIR"
-}
-
-uninstall() {
-    banner
-    step "Uninstalling Oriyn CLI"
-
-    local removed=0
-
-    if [ -L "${BIN_DIR}/${BIN_NAME}" ] || [ -e "${BIN_DIR}/${BIN_NAME}" ]; then
-        rm -f "${BIN_DIR}/${BIN_NAME}"
-        ok "Removed ${BIN_DIR}/${BIN_NAME}"
-        removed=1
-    fi
-
-    if [ -d "${SHARE_DIR}" ]; then
-        rm -rf "${SHARE_DIR}"
-        ok "Removed ${SHARE_DIR}"
-        removed=1
-    fi
-
-    if [ "$removed" = "0" ]; then
-        warn "Nothing to remove — no install found at ${BIN_DIR}/${BIN_NAME} or ${SHARE_DIR}"
-    fi
-
-    printf "\n"
-    printf "%sNote:%s the script removes the binary only.\n" "$BOLD" "$RESET"
-    printf "Credentials, config, and the agent skill are managed by the CLI itself.\n"
-    printf "If you have a working install of %soriyn%s, run it first to clear those:\n\n" "$BOLD" "$RESET"
-    printf "    oriyn uninstall\n\n"
-    printf "Or delete them manually:\n"
-    printf "    rm -rf ~/.config/oriyn ~/.claude/skills/oriyn\n"
-    printf "    # macOS keychain:\n"
-    printf "    security delete-generic-password -s oriyn-cli -a credentials 2>/dev/null || true\n"
-}
-
-main() {
-    if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "-u" ]; then
-        uninstall
-        exit 0
-    fi
-
-    banner
-
-    local target version binary_name base_url binary_url checksums_url
-    target="$(detect_target)"
-    step "Detected platform: ${BOLD}${target}${RESET}"
-
-    step "Fetching latest release..."
-    version="$(resolve_version)"
-    [ -n "$version" ] || fail "Could not resolve latest version. Try setting ORIYN_VERSION=x.y.z"
-
-    binary_name="${BIN_NAME}-${target}"
-    base_url="https://github.com/${REPO}/releases/download/v${version}"
-    binary_url="${base_url}/${binary_name}"
-    checksums_url="${base_url}/checksums.txt"
-
-    if command -v "$BIN_NAME" &>/dev/null; then
-        local current
-        current="$("$BIN_NAME" --version 2>/dev/null | awk '{print $NF}' | tr -d '()')"
-        if [ -n "$current" ]; then
-            step "Installing version: ${BOLD}v${version}${RESET} ${DIM}(upgrading from v${current})${RESET}"
-        else
-            step "Installing version: ${BOLD}v${version}${RESET}"
-        fi
-    else
-        step "Installing version: ${BOLD}v${version}${RESET}"
-    fi
-
-    tmp="$(mktemp)"
-    tmp_checksums="$(mktemp)"
-
-    step "Downloading ${binary_name}..."
-    curl -fSL --progress-bar -o "$tmp" "$binary_url" \
-        || fail "Download failed: $binary_url"
-    curl -fsSL -o "$tmp_checksums" "$checksums_url" \
-        || fail "Checksum file download failed: $checksums_url"
-
-    step "Verifying checksum..."
-    local expected actual
-    expected="$(grep "${binary_name}" "$tmp_checksums" | awk '{print $1}')"
-    actual="$($(checksum_cmd) "$tmp" | awk '{print $1}')"
-    [ -n "$expected" ] || fail "No checksum entry found for ${binary_name}"
-    [ "$expected" = "$actual" ] || fail "Checksum mismatch (expected ${expected}, got ${actual})"
-    ok "Checksum verified"
-
-    step "Installing binary..."
-    mkdir -p "$SHARE_DIR" "$BIN_DIR"
-    chmod +x "$tmp"
-    mv "$tmp" "${SHARE_DIR}/${BIN_NAME}"
-    ok "Installed to ${SHARE_DIR}"
-
-    ln -sf "${SHARE_DIR}/${BIN_NAME}" "${BIN_DIR}/${BIN_NAME}"
-    ok "Symlinked to ${BIN_DIR}/${BIN_NAME}"
-
-    printf "\n"
-    ok "${BOLD}Installation complete!${RESET}"
-    printf "\n"
-    path_hint
-    printf "Run %s%s --help%s to get started.\n" "$BOLD" "$BIN_NAME" "$RESET"
-}
-
-main "$@"
+if [[ -n "${ORIYN_VERSION:-}" ]]; then
+  tag="${ORIYN_VERSION}"
+else
+  tag=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
+  [[ -n "$tag" ]] || err "Could not resolve latest release tag"
+fi
+log "Downloading ${asset} ${tag}…"
+url="https://github.com/${REPO}/releases/download/${tag}/${asset}"
+curl -fSL "$url" -o "$tmp/oriyn"
+chmod +x "$tmp/oriyn"
+mv "$tmp/oriyn" "$INSTALL_DIR/oriyn"
+log "✓ installed to ${INSTALL_DIR}/oriyn"
+case ":$PATH:" in
+  *":$INSTALL_DIR:"*) ;;
+  *) log "Add ${INSTALL_DIR} to your PATH to use 'oriyn' globally." ;;
+esac
+log "Run: oriyn auth login"
