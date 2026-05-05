@@ -51,7 +51,7 @@ jobs:
           cd dist/bin
           shasum -a 256 oriyn-* > checksums.txt
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/bin/oriyn-*
