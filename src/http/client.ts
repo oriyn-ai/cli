@@ -1,4 +1,4 @@
-import ky, { type HTTPError, type KyInstance } from 'ky';
+import ky, { isHTTPError, type KyInstance } from 'ky';
 import type { AuthStore } from '../auth/store.ts';
 import { ApiError, NetworkError, PermissionError } from './errors.ts';
 
@@ -35,7 +35,7 @@ const parseErrorBody = async (response: Response): Promise<{ message: string; bo
 export const createHttpClient = (opts: HttpClientOptions): KyInstance => {
   let refreshAttempted = false;
   return ky.create({
-    prefixUrl: `${opts.apiBase.replace(/\/$/, '')}/v1`,
+    prefix: `${opts.apiBase.replace(/\/$/, '')}/v1`,
     headers: { 'user-agent': USER_AGENT },
     timeout: 60_000,
     retry: {
@@ -45,14 +45,14 @@ export const createHttpClient = (opts: HttpClientOptions): KyInstance => {
     },
     hooks: {
       beforeRequest: [
-        async (request) => {
+        async ({ request }) => {
           if (opts.unauthenticated) return;
           const token = await opts.auth.getValidAccessToken();
           request.headers.set('authorization', `Bearer ${token}`);
         },
       ],
       afterResponse: [
-        async (request, _opts, response) => {
+        async ({ request, response }) => {
           if (response.status === 401 && !refreshAttempted && !opts.unauthenticated) {
             refreshAttempted = true;
             // Force a refresh by clearing in-memory cache; getValidAccessToken
@@ -65,19 +65,20 @@ export const createHttpClient = (opts: HttpClientOptions): KyInstance => {
         },
       ],
       beforeError: [
-        async (error: HTTPError) => {
-          const { response } = error;
-          if (!response) {
-            throw new NetworkError(error.message, { cause: error });
+        async ({ error }) => {
+          if (!isHTTPError(error)) {
+            return new NetworkError(error.message, { cause: error });
           }
+
+          const { response } = error;
           const { message, body } = await parseErrorBody(response);
           if (response.status === 403 && body && typeof body === 'object') {
             const requiredPermission = (body as Record<string, unknown>).required_permission;
             if (typeof requiredPermission === 'string') {
-              throw new PermissionError(message, response.status, body, requiredPermission);
+              return new PermissionError(message, response.status, body, requiredPermission);
             }
           }
-          throw new ApiError(message, response.status, body);
+          return new ApiError(message, response.status, body);
         },
       ],
     },
