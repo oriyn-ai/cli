@@ -29,17 +29,17 @@ export const registerPersonas = (program: Command): void => {
           return;
         }
 
-        const { enrichmentStatus, data } = await app.api.listPersonas(productId);
+        const { analysisStatus, data } = await app.api.listPersonas(productId);
         if (resolveMode() === 'jsonl') {
           writeJson({
             type: 'result',
-            data: { enrichment_status: enrichmentStatus, personas: data },
+            data: { analysis_status: analysisStatus, personas: data },
           });
           return;
         }
         if (data.length === 0) {
           process.stdout.write(
-            `${ui.dim(`No personas yet (status: ${enrichmentStatus}). Run \`oriyn sync\`.`)}\n`,
+            `${ui.dim(`No personas yet (status: ${analysisStatus}). Run \`oriyn sync\`.`)}\n`,
           );
           return;
         }

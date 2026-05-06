@@ -13,7 +13,7 @@ const READY = 'ready';
 export const registerSync = (program: Command): void => {
   program
     .command('sync')
-    .description('Run synthesis and enrichment as needed (idempotent)')
+    .description('Run synthesis and analysis as needed (idempotent)')
     .option('--product <id>', 'override linked product id')
     .option('--only <stage>', '"synthesize" or "enrich" — skip the other')
     .action(async (opts: { product?: string; only?: 'synthesize' | 'enrich' }) => {
@@ -45,26 +45,26 @@ export const registerSync = (program: Command): void => {
           }
         }
 
-        const wantEnrichment = opts.only !== 'synthesize' && detail.enrichment_status !== READY;
-        if (wantEnrichment) {
-          spinner.update('Starting enrichment…');
+        const wantAnalysis = opts.only !== 'synthesize' && detail.analysis_status !== READY;
+        if (wantAnalysis) {
+          spinner.update('Starting analysis…');
           if (resolveMode() === 'jsonl') emitter.step('enrich');
-          await app.api.startEnrichment(productId);
+          await app.api.startAnalysis(productId);
           detail = await poll({
             fn: () => app.api.getProduct(productId),
-            done: (v) => v.enrichment_status === READY || v.enrichment_status === 'failed',
+            done: (v) => v.analysis_status === READY || v.analysis_status === 'failed',
             onTick: (v) => {
-              spinner.update(`Enrichment: ${v.enrichment_status}`);
+              spinner.update(`Analysis: ${v.analysis_status}`);
               if (resolveMode() === 'jsonl') {
                 emitter.emit({
                   type: 'progress',
-                  message: `enrichment: ${v.enrichment_status}`,
+                  message: `analysis: ${v.analysis_status}`,
                 });
               }
             },
           });
-          if (detail.enrichment_status !== READY) {
-            throw new Error(`Enrichment failed (status: ${detail.enrichment_status})`);
+          if (detail.analysis_status !== READY) {
+            throw new Error(`Analysis failed (status: ${detail.analysis_status})`);
           }
         }
 
@@ -72,11 +72,11 @@ export const registerSync = (program: Command): void => {
         if (resolveMode() === 'jsonl') {
           emitter.result({
             context_status: detail.context_status,
-            enrichment_status: detail.enrichment_status,
+            analysis_status: detail.analysis_status,
           });
         } else {
           process.stdout.write(
-            `${ui.green(ui.check())} context=${detail.context_status} enrichment=${detail.enrichment_status}\n`,
+            `${ui.green(ui.check())} context=${detail.context_status} analysis=${detail.analysis_status}\n`,
           );
         }
       } catch (err) {
