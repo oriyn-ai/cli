@@ -54,13 +54,13 @@ export class ApiClient {
   }
 
   async listPersonas(productId: string): Promise<{
-    enrichmentStatus: string;
+    analysisStatus: string;
     data: PersonaItem[];
   }> {
     const parsed = personasResponseSchema.parse(
       await this.http.get(`products/${productId}/personas`).json(),
     );
-    return { enrichmentStatus: parsed.enrichment_status, data: parsed.data };
+    return { analysisStatus: parsed.analysis_status, data: parsed.data };
   }
 
   async getPersonaProfile(productId: string, personaId: string): Promise<PersonaProfile> {
@@ -135,7 +135,7 @@ export class ApiClient {
     return statusResponseSchema.parse(await this.http.post(`products/${productId}/context`).json());
   }
 
-  async startEnrichment(productId: string): Promise<{ status: string }> {
+  async startAnalysis(productId: string): Promise<{ status: string }> {
     return statusResponseSchema.parse(await this.http.post(`products/${productId}/enrich`).json());
   }
 }
