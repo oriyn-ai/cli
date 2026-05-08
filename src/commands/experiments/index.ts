@@ -7,8 +7,7 @@ import { renderTable, truncate, ui } from '../../output/human.ts';
 import { createJsonlEmitter, writeJson } from '../../output/jsonl.ts';
 import { resolveMode } from '../../output/mode.ts';
 import { createSpinner } from '../../output/spinner.ts';
-
-const TERMINAL_STATUSES = new Set(['completed', 'succeeded', 'failed', 'cancelled', 'archived']);
+import { isTerminalExperimentStatus } from './status.ts';
 
 export const registerExperiments = (program: Command): void => {
   const cmd = program
@@ -99,7 +98,7 @@ export const registerExperiments = (program: Command): void => {
         }
         last = await poll({
           fn: () => app.api.getExperiment(productId, created.experimentId),
-          done: (v) => TERMINAL_STATUSES.has(v.status),
+          done: (v) => isTerminalExperimentStatus(v.status),
           onTick: (v) => {
             spinner.update(`Status: ${v.status}`);
             if (resolveMode() === 'jsonl') {
