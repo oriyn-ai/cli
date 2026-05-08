@@ -39,6 +39,10 @@ TypeScript CLI on Bun. Replaces the previous Go implementation.
 - Self-documenting code over comments. Comments only for non-obvious contracts (security boundaries, OAuth quirks, atomic-write semantics, race conditions).
 - No new dependencies without justification logged in `decisions/`.
 
+## Sentry
+
+To auto-resolve a Sentry issue, include `Fixes <SENTRY-SHORT-ID>` (e.g. `Fixes CLI-1`) in the commit message or PR description. Once the commit reaches a release, Sentry marks the issue resolved and alerts on regressions. This repo's prefix is `CLI-`; sibling projects use `API-` (api) and `APP-` (web).
+
 ## Command surface
 
 - `oriyn auth {login,logout,whoami,status}`
