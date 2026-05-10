@@ -4,6 +4,7 @@ import { isTerminalExperimentStatus } from '../../src/commands/experiments/statu
 describe('commands/experiments status polling', () => {
   test('treats API complete status as terminal', () => {
     expect(isTerminalExperimentStatus('complete')).toBe(true);
+    expect(isTerminalExperimentStatus('failed')).toBe(true);
   });
 
   test('keeps active statuses non-terminal', () => {
