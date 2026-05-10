@@ -25,11 +25,12 @@ jobs:
           node-version: 'lts/*'
           registry-url: 'https://registry.npmjs.org'
       - run: bun install --frozen-lockfile
-      - run: bun x biome check .
-      - run: bunx tsc --noEmit
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run format:check
       - run: bun test
       - name: Build npm bundle
-        run: bun build src/index.ts --target=bun --format=esm --outfile=dist/index.js --minify
+        run: bun run build
       - name: Publish to npm via OIDC trusted publishing
         run: npm publish --provenance --access public
 

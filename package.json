@@ -37,6 +37,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
+    "format:check": "biome format .",
     "lint:fix": "biome check --write ."
   },
   "dependencies": {
