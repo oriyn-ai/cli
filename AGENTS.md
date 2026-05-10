@@ -18,6 +18,15 @@ TypeScript CLI on Bun. Replaces the previous Go implementation.
 - `bun build src/index.ts --target=bun --format=esm --outfile=dist/index.js --minify` — npm bundle
 - `bun run scripts/build-binaries.ts` — cross-compile standalone binaries for darwin/linux/windows × x64/arm64
 
+## Supabase migrations
+
+- Database migrations live in `../web/supabase/migrations/`. Do not add migration files under `cli`; keep the shared Supabase schema history in the web repo.
+- Name every migration `{YYYYMMDDHHMMSS}_{descriptive_snake_case}.sql`, for example `20260510143000_add_chat_indexes.sql`. Use a current UTC timestamp and do not add a new migration with an older timestamp than the latest remote migration unless you are intentionally backfilling a missing file.
+- From this directory, create a migration with `TS=$(date -u +%Y%m%d%H%M%S); touch "../web/supabase/migrations/${TS}_add_descriptive_name.sql"`.
+- Run Supabase CLI commands from `../web`: first `npx supabase migration list`, then `npx supabase db push --dry-run`, then `npx supabase db push`.
+- If Supabase reports local migrations would be inserted before the latest remote migration, stop and confirm the mismatch. Only use `npx supabase db push --include-all` after a dry-run proves the only pending historical files are expected backfills.
+- After applying, run `npx supabase db push --dry-run` again from `../web` and expect the remote database to be up to date. Run `pnpm gen-types` in `../web` when schema changes affect typed clients.
+
 ## Storage
 
 - Auth credentials: `~/.config/oriyn/credentials.json` (mode 0600). NEVER fall back to OS keychain — that's the legacy Go pattern, gone.
