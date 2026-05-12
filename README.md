@@ -93,7 +93,6 @@ oriyn experiments run "<hypothesis>" Run experiment, stream progress
 
 oriyn sync                           Idempotent synthesize → enrich
 oriyn status                         One-screen diagnostic
-oriyn skill install                  Install Agent Skill for Claude Code + Codex
 oriyn config [key] [value]           Show or update CLI config
 oriyn open [resource]                Open the web app for the linked product
 oriyn upgrade                        Upgrade to the latest version
@@ -112,12 +111,11 @@ export ORIYN_ACCESS_TOKEN=<token>           # from app.oriyn.ai → Settings
 oriyn experiments run "<hypothesis>"        # streams JSONL to stdout
 ```
 
-Install the Oriyn Agent Skill so Claude Code and Codex automatically reach for
-the CLI when a product decision comes up:
+Install the Oriyn Agent Skill so Claude Code, Codex, Cursor, and other agents
+know when to reach for the CLI:
 
 ```bash
-oriyn skill install                         # writes ~/.claude/skills + ~/.agents/skills
-oriyn skill update                          # refresh after https://oriyn.ai/skill.md changes
+npx skills add oriyn-ai/skills
 ```
 
 The CLI infers JSONL mode from a non-TTY stdout. Each line is one event:

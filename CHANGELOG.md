@@ -44,8 +44,8 @@ Format: `## [version] - YYYY-MM-DD` followed by Added / Changed / Fixed sections
 
 ## [Unreleased]
 
-### Added
-- `oriyn skill install|update|print` for the Bun CLI. `install` now writes the Oriyn Agent Skill to both Claude Code (`~/.claude/skills/oriyn`) and Codex (`~/.agents/skills/oriyn`) by default, with `--agent`, `--url`, `--path`, and `--force` for scoped installs and tests.
+### Changed
+- Agent skill installation now lives in `oriyn-ai/skills` and uses `npx skills add oriyn-ai/skills`. The CLI remains focused on auth, product linking, sync, personas, patterns, and experiments.
 
 ## [0.4.0] - 2026-04-24
 

@@ -62,7 +62,6 @@ To auto-resolve a Sentry issue, include `Fixes <SENTRY-SHORT-ID>` (e.g. `Fixes C
 - `oriyn experiments [id]`, `oriyn experiments run "<hypothesis>" [--agents N] [--product <id>]`
 - `oriyn sync [--only synthesize|enrich]`
 - `oriyn status`
-- `oriyn skill install|update|print` — install or inspect the Oriyn Agent Skill for Claude Code and Codex
 - `oriyn config [key] [value]`
 - `oriyn open [resource]`
 - `oriyn upgrade`
