@@ -44,6 +44,9 @@ Format: `## [version] - YYYY-MM-DD` followed by Added / Changed / Fixed sections
 
 ## [Unreleased]
 
+### Added
+- `oriyn skill install|update|print` for the Bun CLI. `install` now writes the Oriyn Agent Skill to both Claude Code (`~/.claude/skills/oriyn`) and Codex (`~/.agents/skills/oriyn`) by default, with `--agent`, `--url`, `--path`, and `--force` for scoped installs and tests.
+
 ## [0.4.0] - 2026-04-24
 
 ### Changed
