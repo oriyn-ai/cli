@@ -111,6 +111,13 @@ export ORIYN_ACCESS_TOKEN=<token>           # from app.oriyn.ai → Settings
 oriyn experiments run "<hypothesis>"        # streams JSONL to stdout
 ```
 
+Install the Oriyn Agent Skill so Claude Code, Codex, Cursor, and other agents
+know when to reach for the CLI:
+
+```bash
+npx skills add oriyn-ai/skills
+```
+
 The CLI infers JSONL mode from a non-TTY stdout. Each line is one event:
 
 ```jsonc
