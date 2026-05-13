@@ -7,7 +7,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  id-token: write
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -32,57 +31,11 @@ jobs:
         id: release
         if: steps.changesets.outputs.hasChangesets == 'false'
         run: bun run tag-release -- --check
-      - uses: actions/setup-node@v6
-        if: steps.release.outputs.needed == 'true'
-        with:
-          node-version: 'lts/*'
-          registry-url: 'https://registry.npmjs.org'
-      - name: Verify release tag
-        if: steps.release.outputs.needed == 'true'
-        run: bun run scripts/verify-release-tag.ts ${{ steps.release.outputs.tag }}
-      - name: Check npm published version
-        id: npm
-        if: steps.release.outputs.needed == 'true'
-        run: |
-          if npm view "oriyn@${{ steps.release.outputs.version }}" version >/dev/null 2>&1; then
-            echo "published=true" >> "$GITHUB_OUTPUT"
-            echo "oriyn@${{ steps.release.outputs.version }} is already published."
-          else
-            echo "published=false" >> "$GITHUB_OUTPUT"
-          fi
-      - run: bun run typecheck
-        if: steps.release.outputs.needed == 'true'
-      - run: bun run lint
-        if: steps.release.outputs.needed == 'true'
-      - run: bun run format:check
-        if: steps.release.outputs.needed == 'true'
-      - run: bun test
-        if: steps.release.outputs.needed == 'true'
-      - name: Build npm bundle
-        if: steps.release.outputs.needed == 'true'
-        run: bun run build
-      - name: Cross-compile binaries
-        if: steps.release.outputs.needed == 'true'
-        env:
-          ORIYN_VERSION: ${{ steps.release.outputs.tag }}
-          ORIYN_COMMIT: ${{ github.sha }}
-        run: bun run scripts/build-binaries.ts
-      - name: Compute checksums
-        if: steps.release.outputs.needed == 'true'
-        run: |
-          cd dist/bin
-          shasum -a 256 oriyn-* > checksums.txt
-      - name: Publish to npm via OIDC trusted publishing
-        if: steps.release.outputs.needed == 'true' && steps.npm.outputs.published == 'false'
-        run: npm publish --provenance --access public
       - name: Push release tag
         if: steps.release.outputs.needed == 'true'
         run: bun run tag-release
-      - name: Upload to GitHub Release
+      - name: Dispatch release workflow
         if: steps.release.outputs.needed == 'true'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ steps.release.outputs.tag }}
-          files: |
-            dist/bin/oriyn-*
-            dist/bin/checksums.txt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --ref ${{ steps.release.outputs.tag }}
