@@ -8,7 +8,7 @@ TypeScript CLI on Bun. Replaces the previous Go implementation.
 - Create a new branch from updated `main` for every development task.
 - Make one commit per logical change.
 - At the end of the task, push the branch and create a non-draft PR.
-- For CLI releases, always create and push a new tag so the NPM registry publish and GitHub release workflows are triggered.
+- For CLI releases, Changesets owns versioning. Runtime/package PRs need a `.changeset/*.md` entry; merging the generated Version Packages PR automatically pushes the matching `vX.Y.Z` tag and triggers the npm/GitHub release workflows. Create tags manually only for release recovery.
 - `bun install` — install deps
 - `bun run src/index.ts <args>` — run during development (no transpile step)
 - `bun test` — run unit + integration tests

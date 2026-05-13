@@ -1,0 +1,50 @@
+name: Dependabot Hygiene
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bun-lock-and-changeset:
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.head_ref, 'dependabot/npm_and_yarn/production-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - run: git fetch origin main
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --ignore-scripts
+      - name: Add dependency changeset
+        run: bun run scripts/ensure-dependabot-changeset.ts
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+      - name: Commit generated updates
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Dependabot branch already has lockfile and changeset updates."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bun.lock .changeset
+
+          if git diff --cached --quiet; then
+            echo "No tracked Dependabot hygiene updates to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(deps): update bun lockfile and changeset"
+          git push origin HEAD:${{ github.head_ref }}

@@ -37,6 +37,7 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "check:release-intent": "bun run scripts/check-release-intent.ts",
+    "tag-release": "bun run scripts/tag-release-if-needed.ts",
     "verify-release-tag": "bun run scripts/verify-release-tag.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
