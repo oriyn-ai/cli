@@ -5,6 +5,7 @@ import pkg from '../package.json' with { type: 'json' };
 const BASE_REF = process.env.CHANGESET_BASE_REF ?? 'origin/main';
 const text = new TextDecoder();
 const nonReleasePackageFields = new Set(['devDependencies', 'scripts']);
+const releaseRelevantScripts = new Set(['scripts/build-binaries.ts']);
 
 type JsonValue = JsonObject | JsonValue[] | boolean | number | string | null;
 type JsonObject = { [key: string]: JsonValue };
@@ -70,7 +71,7 @@ const isReleaseRelevant = (file: string): boolean => {
   if (file === 'bun.lock') return !packageNonReleaseOnlyChanged;
   if (file === 'install.sh') return true;
 
-  return file.startsWith('src/') || file.startsWith('scripts/');
+  return file.startsWith('src/') || releaseRelevantScripts.has(file);
 };
 
 const relevantChanges = changedFiles.filter(isReleaseRelevant);

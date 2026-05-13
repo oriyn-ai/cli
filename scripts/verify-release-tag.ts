@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import pkg from '../package.json' with { type: 'json' };
 
-const actual = process.env.GITHUB_REF_NAME ?? process.argv[2];
+const actual = process.argv[2] ?? process.env.GITHUB_REF_NAME;
 const expected = `v${pkg.version}`;
 
 if (!actual) {
