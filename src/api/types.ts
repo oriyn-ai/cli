@@ -43,6 +43,10 @@ export const personaItemSchema = z.object({
   status: z.string(),
   updated_at: z.string().nullable().optional(),
   trait_citation_counts: z.array(z.number()).optional(),
+  confidence: z.number().optional(),
+  evidence_basis: z.array(z.record(z.string(), z.unknown())).optional(),
+  assumption_flags: z.array(z.string()).optional(),
+  source_references: z.array(z.record(z.string(), z.unknown())).optional(),
 });
 export type PersonaItem = z.infer<typeof personaItemSchema>;
 
@@ -148,6 +152,93 @@ export const createExperimentResponseSchema = z.object({
   experiment_id: z.string(),
   url: z.string().url(),
 });
+
+export const evidenceItemSchema = z.object({
+  id: z.string(),
+  source_id: z.string(),
+  product_id: z.string(),
+  item_kind: z.string(),
+  content: z.string(),
+  source_location: z.record(z.string(), z.unknown()),
+  citation: z.record(z.string(), z.unknown()),
+  confidence: z.number(),
+  created_at: z.string(),
+});
+export type EvidenceItem = z.infer<typeof evidenceItemSchema>;
+
+export const evidenceSourceSchema = z.object({
+  id: z.string(),
+  product_id: z.string(),
+  kind: z.string(),
+  title: z.string(),
+  uri: z.string().nullable().optional(),
+  body: z.string().nullable().optional(),
+  confidence: z.number(),
+  provenance: z.record(z.string(), z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
+  status: z.string(),
+  error: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  items: z.array(evidenceItemSchema).optional(),
+});
+export type EvidenceSource = z.infer<typeof evidenceSourceSchema>;
+
+export const workflowStartResponseSchema = z.object({
+  status: z.string(),
+  workflow_id: z.string(),
+});
+export type WorkflowStartResponse = z.infer<typeof workflowStartResponseSchema>;
+
+export const researchModeSchema = z.object({
+  kind: z.enum(['interview', 'ab_test', 'delphi', 'playtest']),
+  config_schema: z.record(z.string(), z.unknown()),
+  required_artifacts: z.array(z.string()),
+  participant_rules: z.record(z.string(), z.unknown()),
+  workflow_name: z.string(),
+  task_queue: z.string(),
+  output_schema: z.record(z.string(), z.unknown()),
+  event_schema: z.record(z.string(), z.unknown()),
+  web_creation_form: z.record(z.string(), z.unknown()),
+  web_result_renderer: z.record(z.string(), z.unknown()),
+  cli_command: z.record(z.string(), z.unknown()),
+  eval_suite: z.array(z.string()),
+});
+export type ResearchMode = z.infer<typeof researchModeSchema>;
+
+export const researchOutputSchema = z.object({
+  id: z.string(),
+  participant_id: z.string().nullable().optional(),
+  kind: z.string(),
+  schema_version: z.number(),
+  payload: z.record(z.string(), z.unknown()),
+  citations: z.array(z.record(z.string(), z.unknown())),
+  inference_flags: z.array(z.string()),
+  created_at: z.string(),
+});
+export type ResearchOutput = z.infer<typeof researchOutputSchema>;
+
+export const researchRunSchema = z.object({
+  id: z.string(),
+  product_id: z.string(),
+  kind: z.enum(['interview', 'ab_test', 'delphi', 'playtest']),
+  title: z.string(),
+  status: z.string(),
+  config: z.record(z.string(), z.unknown()),
+  output_summary: z.record(z.string(), z.unknown()).nullable().optional(),
+  error: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  completed_at: z.string().nullable().optional(),
+  outputs: z.array(researchOutputSchema).optional(),
+});
+export type ResearchRun = z.infer<typeof researchRunSchema>;
+
+export const createResearchRunResponseSchema = z.object({
+  research_run_id: z.string(),
+  url: z.string().url(),
+});
+export type CreateResearchRunResponse = z.infer<typeof createResearchRunResponseSchema>;
 
 export const statusResponseSchema = z.object({
   status: z.string(),
