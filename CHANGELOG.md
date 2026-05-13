@@ -47,6 +47,14 @@ Format: `## [version] - YYYY-MM-DD` followed by Added / Changed / Fixed sections
 ### Changed
 - Agent skill installation now lives in `oriyn-ai/skills` and uses `npx skills add oriyn-ai/skills`. The CLI remains focused on auth, product linking, sync, personas, patterns, and experiments.
 
+## [0.1.7] - 2026-05-13
+
+### Fixed
+- Publish the current TypeScript CLI contract for analysis endpoints: `analysis_status` and `source_user_ids`.
+
+### Added
+- Require explicit release intent for CLI source/package changes through Changesets or a release version bump.
+
 ## [0.4.0] - 2026-04-24
 
 ### Changed
