@@ -11,10 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      - run: bun run check:release-intent
+        if: github.event_name == 'pull_request'
       - run: bun run typecheck
       - run: bun run lint
       - run: bun run format:check

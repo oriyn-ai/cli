@@ -17,6 +17,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - run: bun run verify-release-tag
       - uses: actions/setup-node@v6
         with:
           # 'lts/*' = current Node LTS, which ships current npm. Trusted
@@ -41,6 +42,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - run: bun run verify-release-tag
       - run: bun install --frozen-lockfile
       - name: Cross-compile binaries
         env:
