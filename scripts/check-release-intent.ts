@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { existsSync } from 'node:fs';
 import pkg from '../package.json' with { type: 'json' };
 
 const BASE_REF = process.env.CHANGESET_BASE_REF ?? 'origin/main';
@@ -44,7 +45,11 @@ if (relevantChanges.length === 0) {
 }
 
 const hasChangeset = changedFiles.some(
-  (file) => file.startsWith('.changeset/') && file.endsWith('.md') && !file.endsWith('README.md'),
+  (file) =>
+    file.startsWith('.changeset/') &&
+    file.endsWith('.md') &&
+    !file.endsWith('README.md') &&
+    existsSync(file),
 );
 
 const basePackageRaw = git(['show', `${BASE_REF}:package.json`]);
