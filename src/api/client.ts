@@ -5,10 +5,14 @@ import { createHttpClient } from '../http/client.ts';
 import {
   type BottleneckItem,
   bottlenecksResponseSchema,
+  type CreateResearchRunResponse,
   citationsResponseSchema,
   createExperimentResponseSchema,
+  createResearchRunResponseSchema,
+  type EvidenceSource,
   type ExperimentListItem,
   type ExperimentResponse,
+  evidenceSourceSchema,
   experimentListItemSchema,
   experimentResponseSchema,
   type HypothesisItem,
@@ -24,7 +28,13 @@ import {
   personasResponseSchema,
   productDetailSchema,
   productListItemSchema,
+  type ResearchMode,
+  type ResearchRun,
+  researchModeSchema,
+  researchRunSchema,
   statusResponseSchema,
+  type WorkflowStartResponse,
+  workflowStartResponseSchema,
 } from './types.ts';
 
 export interface ApiClientOptions {
@@ -137,5 +147,68 @@ export class ApiClient {
 
   async startAnalysis(productId: string): Promise<{ status: string }> {
     return statusResponseSchema.parse(await this.http.post(`products/${productId}/enrich`).json());
+  }
+
+  async listEvidenceSources(productId: string): Promise<EvidenceSource[]> {
+    return parseArray(
+      evidenceSourceSchema,
+      await this.http.get(`products/${productId}/evidence-sources`).json(),
+    );
+  }
+
+  async createEvidenceSource(
+    productId: string,
+    body: {
+      kind: string;
+      title: string;
+      uri?: string;
+      body?: string;
+      confidence?: number;
+    },
+  ): Promise<EvidenceSource> {
+    return evidenceSourceSchema.parse(
+      await this.http.post(`products/${productId}/evidence-sources`, { json: body }).json(),
+    );
+  }
+
+  async generatePersonas(productId: string, personaCount?: number): Promise<WorkflowStartResponse> {
+    return workflowStartResponseSchema.parse(
+      await this.http
+        .post(`products/${productId}/personas/generate`, {
+          json: personaCount ? { persona_count: personaCount } : {},
+        })
+        .json(),
+    );
+  }
+
+  async listResearchModes(): Promise<ResearchMode[]> {
+    return parseArray(researchModeSchema, await this.http.get('research-modes').json());
+  }
+
+  async listResearchRuns(productId: string): Promise<ResearchRun[]> {
+    return parseArray(
+      researchRunSchema,
+      await this.http.get(`products/${productId}/research-runs`).json(),
+    );
+  }
+
+  async getResearchRun(productId: string, runId: string): Promise<ResearchRun> {
+    return researchRunSchema.parse(
+      await this.http.get(`products/${productId}/research-runs/${runId}`).json(),
+    );
+  }
+
+  async createResearchRun(
+    productId: string,
+    body: {
+      kind: 'interview' | 'ab_test' | 'delphi' | 'playtest';
+      title?: string;
+      config: Record<string, unknown>;
+      participant_rule?: Record<string, unknown>;
+    },
+  ): Promise<CreateResearchRunResponse> {
+    return createResearchRunResponseSchema.parse(
+      await this.http.post(`products/${productId}/research-runs`, { json: body }).json(),
+    );
   }
 }

@@ -7,7 +7,7 @@ import { writeJson } from '../../output/jsonl.ts';
 import { resolveMode } from '../../output/mode.ts';
 
 export const registerPersonas = (program: Command): void => {
-  program
+  const cmd = program
     .command('personas [id]')
     .description('List personas (no id) or show one persona in detail (with id)')
     .option('--product <id>', 'override linked product id')
@@ -51,6 +51,29 @@ export const registerPersonas = (program: Command): void => {
             { header: 'TRAITS', render: (p) => `${p.behavioral_traits.length}` },
           ])}\n`,
         );
+      } catch (err) {
+        reportAndExit(err);
+      } finally {
+        await app.shutdown();
+      }
+    });
+
+  cmd
+    .command('generate')
+    .description('Generate evidence-backed personas for the linked product')
+    .option('--product <id>', 'override linked product id')
+    .option('--count <n>', 'number of personas to generate', (value) => Number.parseInt(value, 10))
+    .action(async (opts: { product?: string; count?: number }) => {
+      const app = await createApp();
+      try {
+        const { productId } = await requireProduct({ flagProduct: opts.product, cwd: app.cwd });
+        const started = await app.api.generatePersonas(productId, opts.count);
+        if (resolveMode() === 'jsonl') {
+          writeJson({ type: 'result', data: started });
+          return;
+        }
+        process.stdout.write(`${ui.green('Persona generation started')}\n`);
+        process.stdout.write(`${ui.dim(`workflow: ${started.workflow_id}`)}\n`);
       } catch (err) {
         reportAndExit(err);
       } finally {
