@@ -4,6 +4,10 @@ import pkg from '../package.json' with { type: 'json' };
 
 const BASE_REF = process.env.CHANGESET_BASE_REF ?? 'origin/main';
 const text = new TextDecoder();
+const nonReleasePackageFields = new Set(['devDependencies', 'scripts']);
+
+type JsonValue = JsonObject | JsonValue[] | boolean | number | string | null;
+type JsonObject = { [key: string]: JsonValue };
 
 const git = (args: string[]): string => {
   const result = Bun.spawnSync(['git', ...args], {
@@ -25,6 +29,26 @@ const parseFiles = (output: string): string[] =>
     .map((file) => file.trim())
     .filter(Boolean);
 
+const normalizeJson = (value: JsonValue): JsonValue => {
+  if (Array.isArray(value)) return value.map(normalizeJson);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nestedValue]) => [key, normalizeJson(nestedValue)]),
+  );
+};
+
+const stripNonReleasePackageFields = (packageJson: JsonObject): JsonObject =>
+  Object.fromEntries(
+    Object.entries(packageJson).filter(([key]) => !nonReleasePackageFields.has(key)),
+  );
+
+const hasReleasePackageJsonChanges = (basePackage: JsonObject, headPackage: JsonObject): boolean =>
+  JSON.stringify(normalizeJson(stripNonReleasePackageFields(basePackage))) !==
+  JSON.stringify(normalizeJson(stripNonReleasePackageFields(headPackage)));
+
 const changedFiles = [
   ...new Set([
     ...parseFiles(git(['diff', '--name-only', `${BASE_REF}...HEAD`])),
@@ -33,9 +57,21 @@ const changedFiles = [
   ]),
 ];
 
-const releaseRelevantFiles = new Set(['package.json', 'bun.lock', 'install.sh']);
-const isReleaseRelevant = (file: string): boolean =>
-  releaseRelevantFiles.has(file) || file.startsWith('src/') || file.startsWith('scripts/');
+const basePackageRaw = git(['show', `${BASE_REF}:package.json`]);
+const basePackage = JSON.parse(basePackageRaw) as JsonObject;
+const headPackage = pkg as JsonObject;
+const packageJsonChanged = changedFiles.includes('package.json');
+const packageReleaseChanged =
+  packageJsonChanged && hasReleasePackageJsonChanges(basePackage, headPackage);
+const packageNonReleaseOnlyChanged = packageJsonChanged && !packageReleaseChanged;
+
+const isReleaseRelevant = (file: string): boolean => {
+  if (file === 'package.json') return packageReleaseChanged;
+  if (file === 'bun.lock') return !packageNonReleaseOnlyChanged;
+  if (file === 'install.sh') return true;
+
+  return file.startsWith('src/') || file.startsWith('scripts/');
+};
 
 const relevantChanges = changedFiles.filter(isReleaseRelevant);
 
@@ -52,8 +88,6 @@ const hasChangeset = changedFiles.some(
     existsSync(file),
 );
 
-const basePackageRaw = git(['show', `${BASE_REF}:package.json`]);
-const basePackage = JSON.parse(basePackageRaw) as { version?: unknown };
 const versionBumped =
   typeof basePackage.version === 'string' && basePackage.version !== pkg.version;
 const changelogChanged = changedFiles.includes('CHANGELOG.md');
