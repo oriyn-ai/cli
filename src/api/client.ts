@@ -119,13 +119,9 @@ export class ApiClient {
     return statusResponseSchema.parse(await this.http.post(`products/${productId}/enrich`).json());
   }
 
-  async generatePersonas(productId: string, personaCount?: number): Promise<WorkflowStartResponse> {
+  async generatePersonas(productId: string): Promise<WorkflowStartResponse> {
     return workflowStartResponseSchema.parse(
-      await this.http
-        .post(`products/${productId}/personas/generate`, {
-          json: personaCount === undefined ? {} : { persona_count: personaCount },
-        })
-        .json(),
+      await this.http.post(`products/${productId}/enrich`).json(),
     );
   }
 
