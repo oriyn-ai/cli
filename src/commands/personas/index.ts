@@ -60,7 +60,7 @@ export const registerPersonas = (program: Command): void => {
 
   cmd
     .command('generate')
-    .description('Generate evidence-backed personas for the linked product')
+    .description('Generate behavior-grounded personas for the linked product')
     .option('--product <id>', 'override linked product id')
     .option('--count <n>', 'number of personas to generate', (value) => Number.parseInt(value, 10))
     .action(async (opts: { product?: string; count?: number }) => {
@@ -73,7 +73,7 @@ export const registerPersonas = (program: Command): void => {
           return;
         }
         process.stdout.write(`${ui.green('Persona generation started')}\n`);
-        process.stdout.write(`${ui.dim(`workflow: ${started.workflow_id}`)}\n`);
+        process.stdout.write(`${ui.dim(`status: ${started.status}`)}\n`);
       } catch (err) {
         reportAndExit(err);
       } finally {

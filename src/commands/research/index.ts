@@ -11,7 +11,7 @@ import { createSpinner } from '../../output/spinner.ts';
 type RunKind = 'interview' | 'ab_test' | 'delphi' | 'playtest';
 
 const isTerminal = (status: string): boolean =>
-  ['complete', 'failed', 'cancelled'].includes(status);
+  ['succeeded', 'failed', 'cancelled'].includes(status);
 
 async function createAndFollowRun(
   kind: RunKind,
@@ -78,7 +78,7 @@ async function createAndFollowRun(
 }
 
 export const registerResearch = (program: Command): void => {
-  const cmd = program.command('research').description('Run evidence-backed research modes');
+  const cmd = program.command('research').description('Run persona-grounded research modes');
 
   cmd
     .command('modes')

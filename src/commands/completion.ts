@@ -4,7 +4,7 @@ import { reportAndExit } from '../lib/handle-error.ts';
 const BASH = `# oriyn bash completion
 _oriyn_complete() {
   local cur="\${COMP_WORDS[COMP_CWORD]}"
-  local cmds="auth link unlink products personas patterns experiments sync status config open upgrade completion"
+  local cmds="auth link unlink products personas patterns research sync status config open upgrade completion"
   COMPREPLY=( $(compgen -W "$cmds" -- "$cur") )
 }
 complete -F _oriyn_complete oriyn`;
@@ -19,7 +19,7 @@ _oriyn() {
     'products:List products'
     'personas:List or detail personas'
     'patterns:List mined patterns'
-    'experiments:List or run experiments'
+    'research:Create or inspect research runs'
     'sync:Run synthesis + enrichment'
     'status:One-screen diagnostic'
     'config:Show or update CLI config'
@@ -32,7 +32,7 @@ _oriyn() {
 _oriyn`;
 
 const FISH = `# oriyn fish completion
-complete -c oriyn -n "__fish_use_subcommand" -a "auth link unlink products personas patterns experiments sync status config open upgrade completion"`;
+complete -c oriyn -n "__fish_use_subcommand" -a "auth link unlink products personas patterns research sync status config open upgrade completion"`;
 
 export const registerCompletion = (program: Command): void => {
   program

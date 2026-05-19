@@ -99,7 +99,7 @@ export const registerLink = (program: Command): void => {
             `${ui.green(ui.check())} Linked ${ui.bold(productId)} → ${ui.dim(linkPath)}\n`,
           );
           process.stdout.write(
-            `${ui.dim('Try:')} ${ui.cyan('oriyn experiments run "<your hypothesis>"')}\n`,
+            `${ui.dim('Try:')} ${ui.cyan('oriyn research interview --question "<your question>"')}\n`,
           );
         }
       } catch (err) {

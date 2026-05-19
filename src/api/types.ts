@@ -44,9 +44,7 @@ export const personaItemSchema = z.object({
   updated_at: z.string().nullable().optional(),
   trait_citation_counts: z.array(z.number()).optional(),
   confidence: z.number().optional(),
-  evidence_basis: z.array(z.record(z.string(), z.unknown())).optional(),
   assumption_flags: z.array(z.string()).optional(),
-  source_references: z.array(z.record(z.string(), z.unknown())).optional(),
 });
 export type PersonaItem = z.infer<typeof personaItemSchema>;
 
@@ -108,97 +106,19 @@ export const bottlenecksResponseSchema = z.object({
   data: z.array(bottleneckItemSchema),
 });
 
-export const personaBreakdownItemSchema = z.object({
-  persona: z.string(),
-  response: z.string(),
-  reasoning: z.string(),
-  adoption_rate: z.number(),
-});
-
-export const experimentSummarySchema = z.object({
-  verdict: z.string(),
-  convergence: z.number(),
-  summary: z.string(),
-  persona_breakdown: z.array(personaBreakdownItemSchema),
-  question_results: z.unknown().optional(),
-  agent_count: z.number(),
-});
-export type ExperimentSummary = z.infer<typeof experimentSummarySchema>;
-
-export const experimentResponseSchema = z.object({
-  id: z.string(),
-  product_id: z.string(),
-  hypothesis: z.string(),
-  status: z.string(),
-  created_by_email: z.string(),
-  created_at: z.string(),
-  summary: experimentSummarySchema.nullable().optional(),
-});
-export type ExperimentResponse = z.infer<typeof experimentResponseSchema>;
-
-export const experimentListItemSchema = z.object({
-  id: z.string(),
-  title: z.string().nullable().optional(),
-  hypothesis: z.string(),
-  status: z.string(),
-  verdict: z.string().nullable().optional(),
-  convergence: z.number().nullable().optional(),
-  created_by_email: z.string(),
-  created_at: z.string(),
-});
-export type ExperimentListItem = z.infer<typeof experimentListItemSchema>;
-
-export const createExperimentResponseSchema = z.object({
-  experiment_id: z.string(),
-  url: z.string().url(),
-});
-
-export const evidenceItemSchema = z.object({
-  id: z.string(),
-  source_id: z.string(),
-  product_id: z.string(),
-  item_kind: z.string(),
-  content: z.string(),
-  source_location: z.record(z.string(), z.unknown()),
-  citation: z.record(z.string(), z.unknown()),
-  confidence: z.number(),
-  created_at: z.string(),
-});
-export type EvidenceItem = z.infer<typeof evidenceItemSchema>;
-
-export const evidenceSourceSchema = z.object({
-  id: z.string(),
-  product_id: z.string(),
-  kind: z.string(),
-  title: z.string(),
-  uri: z.string().nullable().optional(),
-  body: z.string().nullable().optional(),
-  confidence: z.number(),
-  provenance: z.record(z.string(), z.unknown()),
-  metadata: z.record(z.string(), z.unknown()),
-  status: z.string(),
-  error: z.string().nullable().optional(),
-  created_at: z.string(),
-  updated_at: z.string(),
-  items: z.array(evidenceItemSchema).optional(),
-});
-export type EvidenceSource = z.infer<typeof evidenceSourceSchema>;
-
 export const workflowStartResponseSchema = z.object({
   status: z.string(),
-  workflow_id: z.string(),
+  workflow_id: z.string().optional(),
 });
 export type WorkflowStartResponse = z.infer<typeof workflowStartResponseSchema>;
 
 export const researchModeSchema = z.object({
   kind: z.enum(['interview', 'ab_test', 'delphi', 'playtest']),
   config_schema: z.record(z.string(), z.unknown()),
-  required_artifacts: z.array(z.string()),
   participant_rules: z.record(z.string(), z.unknown()),
   workflow_name: z.string(),
   task_queue: z.string(),
   output_schema: z.record(z.string(), z.unknown()),
-  event_schema: z.record(z.string(), z.unknown()),
   web_creation_form: z.record(z.string(), z.unknown()),
   web_result_renderer: z.record(z.string(), z.unknown()),
   cli_command: z.record(z.string(), z.unknown()),
@@ -212,8 +132,6 @@ export const researchOutputSchema = z.object({
   kind: z.string(),
   schema_version: z.number(),
   payload: z.record(z.string(), z.unknown()),
-  citations: z.array(z.record(z.string(), z.unknown())),
-  inference_flags: z.array(z.string()),
   created_at: z.string(),
 });
 export type ResearchOutput = z.infer<typeof researchOutputSchema>;
