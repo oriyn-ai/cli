@@ -16,16 +16,20 @@ export const registerPersonas = (program: Command): void => {
       try {
         const { productId } = await requireProduct({ flagProduct: opts.product, cwd: app.cwd });
         if (id) {
-          const profile = await app.api.getPersonaProfile(productId, id);
+          const { data } = await app.api.listPersonas(productId);
+          const persona = data.find((item) => item.id === id);
+          if (!persona) throw new Error(`Persona not found: ${id}`);
           if (resolveMode() === 'jsonl') {
-            writeJson({ type: 'result', data: { id, ...profile } });
+            writeJson({ type: 'result', data: persona });
             return;
           }
           process.stdout.write(`${ui.bold('Persona')}: ${id}\n\n`);
-          process.stdout.write(`${ui.bold('Static facts')}\n`);
-          for (const f of profile.static_facts) process.stdout.write(`  ${ui.arrow()} ${f}\n`);
-          process.stdout.write(`\n${ui.bold('Dynamic facts')}\n`);
-          for (const f of profile.dynamic_facts) process.stdout.write(`  ${ui.arrow()} ${f}\n`);
+          process.stdout.write(`${ui.bold(persona.name)}\n`);
+          process.stdout.write(`${persona.description}\n\n`);
+          process.stdout.write(`${ui.bold('Traits')}\n`);
+          for (const trait of persona.behavioral_traits)
+            process.stdout.write(`  ${ui.arrow()} ${trait}\n`);
+          process.stdout.write(`\n${ui.bold('Size')}: ${persona.size_estimate}%\n`);
           return;
         }
 
