@@ -60,20 +60,19 @@ export const registerPersonas = (program: Command): void => {
 
   cmd
     .command('generate')
-    .description('Generate evidence-backed personas for the linked product')
+    .description('Generate behavior-grounded personas for the linked product')
     .option('--product <id>', 'override linked product id')
-    .option('--count <n>', 'number of personas to generate', (value) => Number.parseInt(value, 10))
-    .action(async (opts: { product?: string; count?: number }) => {
+    .action(async (opts: { product?: string }) => {
       const app = await createApp();
       try {
         const { productId } = await requireProduct({ flagProduct: opts.product, cwd: app.cwd });
-        const started = await app.api.generatePersonas(productId, opts.count);
+        const started = await app.api.generatePersonas(productId);
         if (resolveMode() === 'jsonl') {
           writeJson({ type: 'result', data: started });
           return;
         }
         process.stdout.write(`${ui.green('Persona generation started')}\n`);
-        process.stdout.write(`${ui.dim(`workflow: ${started.workflow_id}`)}\n`);
+        process.stdout.write(`${ui.dim(`status: ${started.status}`)}\n`);
       } catch (err) {
         reportAndExit(err);
       } finally {

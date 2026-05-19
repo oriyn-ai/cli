@@ -7,14 +7,7 @@ import {
   bottlenecksResponseSchema,
   type CreateResearchRunResponse,
   citationsResponseSchema,
-  createExperimentResponseSchema,
   createResearchRunResponseSchema,
-  type EvidenceSource,
-  type ExperimentListItem,
-  type ExperimentResponse,
-  evidenceSourceSchema,
-  experimentListItemSchema,
-  experimentResponseSchema,
   type HypothesisItem,
   hypothesesResponseSchema,
   type Me,
@@ -118,29 +111,6 @@ export class ApiClient {
     ];
   }
 
-  async listExperiments(productId: string): Promise<ExperimentListItem[]> {
-    return parseArray(
-      experimentListItemSchema,
-      await this.http.get(`products/${productId}/experiments`).json(),
-    );
-  }
-
-  async getExperiment(productId: string, experimentId: string): Promise<ExperimentResponse> {
-    return experimentResponseSchema.parse(
-      await this.http.get(`products/${productId}/experiments/${experimentId}`).json(),
-    );
-  }
-
-  async createExperiment(
-    productId: string,
-    body: { hypothesis: string; agent_count?: number },
-  ): Promise<{ experimentId: string; url: string }> {
-    const parsed = createExperimentResponseSchema.parse(
-      await this.http.post(`products/${productId}/experiments`, { json: body }).json(),
-    );
-    return { experimentId: parsed.experiment_id, url: parsed.url };
-  }
-
   async startSynthesis(productId: string): Promise<{ status: string }> {
     return statusResponseSchema.parse(await this.http.post(`products/${productId}/context`).json());
   }
@@ -149,35 +119,9 @@ export class ApiClient {
     return statusResponseSchema.parse(await this.http.post(`products/${productId}/enrich`).json());
   }
 
-  async listEvidenceSources(productId: string): Promise<EvidenceSource[]> {
-    return parseArray(
-      evidenceSourceSchema,
-      await this.http.get(`products/${productId}/evidence-sources`).json(),
-    );
-  }
-
-  async createEvidenceSource(
-    productId: string,
-    body: {
-      kind: string;
-      title: string;
-      uri?: string;
-      body?: string;
-      confidence?: number;
-    },
-  ): Promise<EvidenceSource> {
-    return evidenceSourceSchema.parse(
-      await this.http.post(`products/${productId}/evidence-sources`, { json: body }).json(),
-    );
-  }
-
-  async generatePersonas(productId: string, personaCount?: number): Promise<WorkflowStartResponse> {
+  async generatePersonas(productId: string): Promise<WorkflowStartResponse> {
     return workflowStartResponseSchema.parse(
-      await this.http
-        .post(`products/${productId}/personas/generate`, {
-          json: personaCount ? { persona_count: personaCount } : {},
-        })
-        .json(),
+      await this.http.post(`products/${productId}/enrich`).json(),
     );
   }
 
