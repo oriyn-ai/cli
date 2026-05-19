@@ -53,12 +53,6 @@ export const personasResponseSchema = z.object({
   data: z.array(personaItemSchema),
 });
 
-export const personaProfileSchema = z.object({
-  static_facts: z.array(z.string()),
-  dynamic_facts: z.array(z.string()),
-});
-export type PersonaProfile = z.infer<typeof personaProfileSchema>;
-
 export const citationItemSchema = z.object({
   id: z.string(),
   replay_session_id: z.string(),

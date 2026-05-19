@@ -14,10 +14,8 @@ import {
   meSchema,
   type Pattern,
   type PersonaItem,
-  type PersonaProfile,
   type ProductDetail,
   type ProductListItem,
-  personaProfileSchema,
   personasResponseSchema,
   productDetailSchema,
   productListItemSchema,
@@ -64,12 +62,6 @@ export class ApiClient {
       await this.http.get(`products/${productId}/personas`).json(),
     );
     return { analysisStatus: parsed.analysis_status, data: parsed.data };
-  }
-
-  async getPersonaProfile(productId: string, personaId: string): Promise<PersonaProfile> {
-    return personaProfileSchema.parse(
-      await this.http.get(`products/${productId}/personas/${personaId}/profile`).json(),
-    );
   }
 
   async getPersonaCitations(
