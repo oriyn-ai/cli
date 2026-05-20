@@ -2,4 +2,4 @@
 "oriyn": patch
 ---
 
-Align CLI commands and API client surfaces with the clean v1 schema reset by removing legacy evidence, experiment, and persona-count generation paths.
+Align CLI commands, docs, and API client surfaces with the clean v1 schema reset by removing old intake, run-management, and persona-count generation paths.

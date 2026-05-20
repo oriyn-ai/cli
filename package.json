@@ -1,7 +1,7 @@
 {
   "name": "oriyn",
   "version": "0.1.9",
-  "description": "Oriyn CLI — predict how users respond to product changes before shipping.",
+  "description": "Oriyn CLI — run persona-grounded product research before shipping.",
   "type": "module",
   "bin": {
     "oriyn": "./src/index.ts"
@@ -19,10 +19,10 @@
   "keywords": [
     "oriyn",
     "cli",
-    "experiments",
+    "research",
     "personas",
     "product-analytics",
-    "ab-testing",
+    "product-research",
     "agent",
     "ai",
     "claude-code",
