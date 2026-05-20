@@ -6,7 +6,6 @@ import {
   type BottleneckItem,
   bottlenecksResponseSchema,
   type CreateResearchRunResponse,
-  citationsResponseSchema,
   createResearchRunResponseSchema,
   type HypothesisItem,
   hypothesesResponseSchema,
@@ -62,20 +61,6 @@ export class ApiClient {
       await this.http.get(`products/${productId}/personas`).json(),
     );
     return { analysisStatus: parsed.analysis_status, data: parsed.data };
-  }
-
-  async getPersonaCitations(
-    productId: string,
-    personaId: string,
-    traitIndex: number,
-  ): Promise<unknown> {
-    return citationsResponseSchema.parse(
-      await this.http
-        .get(`products/${productId}/personas/${personaId}/citations`, {
-          searchParams: { trait_index: traitIndex },
-        })
-        .json(),
-    );
   }
 
   async listHypotheses(productId: string): Promise<HypothesisItem[]> {
