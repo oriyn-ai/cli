@@ -46,16 +46,15 @@ describe('api/types analysis schemas', () => {
           generated_at: '2026-05-07T00:00:00Z',
           status: 'active',
           updated_at: '2026-05-07T00:00:00Z',
-          trait_citation_counts: [2, 0, 1],
         },
       ],
     });
 
     expect(parsed.analysis_status).toBe('ready');
-    expect(parsed.data[0]?.trait_citation_counts).toEqual([2, 0, 1]);
+    expect(parsed.data[0]?.name).toBe('Activation Seeker');
   });
 
-  test('parses pattern source_user_ids', () => {
+  test('parses pattern responses without source-user identifiers', () => {
     const hypothesis = hypothesesResponseSchema.parse({
       analysis_status: 'ready',
       data: [
@@ -65,7 +64,6 @@ describe('api/types analysis schemas', () => {
           frequency: 12,
           user_count: 4,
           significance_pct: 100,
-          source_user_ids: ['11111111-1111-4111-8111-111111111111'],
         },
       ],
     });
@@ -78,12 +76,11 @@ describe('api/types analysis schemas', () => {
           traversals: 7,
           user_count: 3,
           avg_duration_seconds: 14.5,
-          source_user_ids: ['22222222-2222-4222-8222-222222222222'],
         },
       ],
     });
 
-    expect(hypothesis.data[0]?.source_user_ids).toEqual(['11111111-1111-4111-8111-111111111111']);
-    expect(bottleneck.data[0]?.source_user_ids).toEqual(['22222222-2222-4222-8222-222222222222']);
+    expect(hypothesis.data[0]?.sequence).toEqual(['entry', 'activation']);
+    expect(bottleneck.data[0]?.sequence).toEqual(['checkout', 'payment']);
   });
 });

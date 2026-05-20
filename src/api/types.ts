@@ -42,7 +42,6 @@ export const personaItemSchema = z.object({
   generated_at: z.string(),
   status: z.string(),
   updated_at: z.string().nullable().optional(),
-  trait_citation_counts: z.array(z.number()).optional(),
   confidence: z.number().optional(),
   assumption_flags: z.array(z.string()).optional(),
 });
@@ -53,30 +52,12 @@ export const personasResponseSchema = z.object({
   data: z.array(personaItemSchema),
 });
 
-export const citationItemSchema = z.object({
-  id: z.string(),
-  replay_session_id: z.string(),
-  external_session_id: z.string(),
-  session_summary: z.string(),
-  frustration_score: z.number(),
-  duration_ms: z.number(),
-  recorded_at: z.string(),
-  replay_url: z.string().nullable().optional(),
-  has_stored_replay: z.boolean(),
-});
-export type CitationItem = z.infer<typeof citationItemSchema>;
-
-export const citationsResponseSchema = z.object({
-  citations: z.array(citationItemSchema),
-});
-
 export const hypothesisItemSchema = z.object({
   sequence: z.array(z.string()),
   rendered_sequence: z.array(z.string()),
   frequency: z.number(),
   user_count: z.number(),
   significance_pct: z.number(),
-  source_user_ids: z.array(z.string()),
 });
 export type HypothesisItem = z.infer<typeof hypothesisItemSchema>;
 
@@ -91,7 +72,6 @@ export const bottleneckItemSchema = z.object({
   traversals: z.number(),
   user_count: z.number(),
   avg_duration_seconds: z.number(),
-  source_user_ids: z.array(z.string()),
 });
 export type BottleneckItem = z.infer<typeof bottleneckItemSchema>;
 
