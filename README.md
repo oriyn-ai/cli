@@ -1,7 +1,7 @@
 <h1 align="center">oriyn</h1>
 
 <p align="center">
-  Predict how users respond to product changes — <em>before</em> you ship.<br/>
+  Run persona-grounded product research — <em>before</em> you ship.<br/>
   From your terminal. Or any AI agent.
 </p>
 
@@ -24,19 +24,19 @@
 
 ---
 
-The CLI is built around a single headline command:
+The CLI is built around persona-grounded research modes:
 
 ```bash
-oriyn experiments run "Should we move pricing before signup?"
+oriyn research ab-test --question "Which onboarding offer is clearer?" --a "Free trial" --b "Freemium tier"
 ```
 
 It auto-resolves the product from a nearby `oriyn.json`, streams progress as
 JSONL when piped (or shows a spinner in a TTY), and prints a structured
-verdict with per-persona breakdown.
+research result with participant summaries.
 
 ## Why oriyn
 
-- **Predict, don't guess.** Run an experiment against your real users' synthesized personas and get a verdict in seconds — before you build the variant.
+- **Research before you build.** Run interviews, A/B research, Delphi rounds, or playtests against synthesized personas before you build the variant.
 - **Agent-native.** Non-TTY → JSONL. Designed for Claude Code, Codex, CI, and shell pipelines from day one.
 - **Cross-provider.** Personas are built from your product analytics, session replays, and payments — not from a single tool's view.
 - **Local-first auth.** OAuth 2.1 + PKCE direct to your browser. Tokens at `~/.config/oriyn/credentials.json` (`0600`). No keychain, no daemons.
@@ -65,7 +65,8 @@ runtime needed.
 oriyn auth login                            # browser PKCE
 cd <your repo>
 oriyn link                                  # interactive picker → oriyn.json
-oriyn experiments run "<your hypothesis>"   # the headline flow
+oriyn research modes                        # see available research modes
+oriyn research ab-test --question "<question>" --a "<variant A>" --b "<variant B>"
 ```
 
 `oriyn.json` lives at the project root and is shared with your team. The CLI
@@ -87,9 +88,12 @@ oriyn products                       List products in the org
 oriyn personas                       List behavioral personas
 oriyn personas <id>                  Persona detail (profile + facts)
 oriyn patterns                       Mined hypotheses + bottlenecks
-oriyn experiments                    List experiments
-oriyn experiments <id>               Get one experiment
-oriyn experiments run "<hypothesis>" Run experiment, stream progress
+oriyn research modes                 List research modes
+oriyn research list                  List research runs
+oriyn research interview             Run a persona interview
+oriyn research ab-test               Compare two variants
+oriyn research delphi                Run a multi-round persona workshop
+oriyn research playtest              Run a task-based playtest
 
 oriyn sync                           Idempotent synthesize → enrich
 oriyn status                         One-screen diagnostic
@@ -108,7 +112,7 @@ var and commit `oriyn.json`:
 
 ```bash
 export ORIYN_ACCESS_TOKEN=<token>           # from app.oriyn.ai → Settings
-oriyn experiments run "<hypothesis>"        # streams JSONL to stdout
+oriyn research interview --question "<question>"  # streams JSONL to stdout
 ```
 
 Install the Oriyn Agent Skill so Claude Code, Codex, Cursor, and other agents
@@ -121,9 +125,9 @@ npx skills add oriyn-ai/skills
 The CLI infers JSONL mode from a non-TTY stdout. Each line is one event:
 
 ```jsonc
-{"type":"step","name":"create-experiment","ts":"…"}
+{"type":"step","name":"resolve-product","ts":"…"}
 {"type":"progress","message":"status: running","ts":"…"}
-{"type":"result","data":{"summary":{"verdict":"ship","convergence":0.86,"persona_breakdown":[…]}}}
+{"type":"result","data":{"kind":"interview","status":"succeeded","output_summary":{…}}}
 ```
 
 Force the mode explicitly with `--human` or `--json` if you need to override

@@ -59,7 +59,7 @@ To auto-resolve a Sentry issue, include `Fixes <SENTRY-SHORT-ID>` (e.g. `Fixes C
 - `oriyn products`
 - `oriyn personas [id] [--product <id>]`
 - `oriyn patterns [--only hypothesis|bottleneck]`
-- `oriyn experiments [id]`, `oriyn experiments run "<hypothesis>" [--agents N] [--product <id>]`
+- `oriyn research {modes,list,interview,ab-test,delphi,playtest}`
 - `oriyn sync [--only synthesize|enrich]`
 - `oriyn status`
 - `oriyn config [key] [value]`

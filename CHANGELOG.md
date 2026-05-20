@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- 0de013d: Add evidence-backed research OS commands for evidence intake, persona generation, research mode discovery, and interview, A/B test, Delphi, and playtest runs.
+- 0de013d: Add research mode discovery plus interview, A/B research, Delphi, and playtest runs.
 
 ## 0.1.8
 
@@ -55,7 +55,7 @@ Format: `## [version] - YYYY-MM-DD` followed by Added / Changed / Fixed sections
 
 ### Changed
 
-- Agent skill installation now lives in `oriyn-ai/skills` and uses `npx skills add oriyn-ai/skills`. The CLI remains focused on auth, product linking, sync, personas, patterns, and experiments.
+- Agent skill installation now lives in `oriyn-ai/skills` and uses `npx skills add oriyn-ai/skills`. The CLI remains focused on auth, product linking, sync, personas, patterns, and research.
 
 ## [0.1.7] - 2026-05-13
 
@@ -93,25 +93,22 @@ Format: `## [version] - YYYY-MM-DD` followed by Added / Changed / Fixed sections
 - `oriyn products context show / edit / history / version` — inspect and patch synthesized product context
 - `oriyn products scrape` — kick off a Firecrawl scrape of a product source
 - `oriyn personas profile` — Supermemory static + dynamic persona facts
-- `oriyn personas citations --trait-index N` — evidence sessions for a persona trait
+- `oriyn personas citations --trait-index N` — source sessions for a persona trait
 - `oriyn knowledge search` — semantic search across the product knowledge graph
 - `oriyn timeline` — cross-provider per-user event timeline
 - `oriyn replay` — raw rrweb events for a stored session asset (plus `--output FILE` to avoid bloating agent context)
 - `oriyn timeline --output FILE` — write full JSON response to disk instead of stdout
-- `oriyn experiment archive` — archive a completed experiment
-- `oriyn experiment run --agents N` — plan-aware agent-count override
-- `oriyn experiment run --hypothesis-stdin` — pipe long proposals from stdin
-- `oriyn experiment run --no-wait / --poll-interval / --timeout` — tunable polling
+- prior run-management commands for archiving, agent-count overrides, stdin proposals, and polling controls
 - `oriyn synthesize --wait` and `oriyn enrich --wait` — block until terminal status
 - Login `--no-browser` flag for headless and remote-shell contexts
 - `ORIYN_AGENT=1`, `--quiet` global flag, `ORIYN_API_BASE` / `ORIYN_WEB_BASE` env vars
-- Structured `APIError` surfacing credits/agent-count details for agent self-correction
+- Structured `APIError` surfacing capacity details for agent self-correction
 - Distinct exit codes (1 user, 2 API, 3 session, 4 network) for scripted use
 
 ### Changed
 
 - `ProductDetail` no longer carries `description` / `urls` (stale — API dropped them)
-- `ExperimentListItem` now includes `title` and `convergence`
+- Run list items include title and agreement metrics
 - `PersonaItem.behavioral_traits` is a `[]string` (was `json.RawMessage`)
 - All list/get commands honor agent mode (`--json` / `--quiet` / `ORIYN_AGENT`)
 - Root `Execute` returns `int` — main propagates it as the process exit code
