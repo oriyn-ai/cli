@@ -122,7 +122,7 @@ export class ApiClient {
   async createResearchRun(
     productId: string,
     body: {
-      kind: 'interview' | 'ab_test' | 'delphi' | 'playtest';
+      kind: 'ab_test' | 'delphi' | 'playtest' | 'experiment';
       title?: string;
       config: Record<string, unknown>;
       participant_rule?: Record<string, unknown>;

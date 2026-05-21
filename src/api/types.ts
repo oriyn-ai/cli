@@ -87,7 +87,7 @@ export const workflowStartResponseSchema = z.object({
 export type WorkflowStartResponse = z.infer<typeof workflowStartResponseSchema>;
 
 export const researchModeSchema = z.object({
-  kind: z.enum(['interview', 'ab_test', 'delphi', 'playtest']),
+  kind: z.enum(['ab_test', 'delphi', 'playtest', 'experiment']),
   config_schema: z.record(z.string(), z.unknown()),
   participant_rules: z.record(z.string(), z.unknown()),
   workflow_name: z.string(),
@@ -113,7 +113,7 @@ export type ResearchOutput = z.infer<typeof researchOutputSchema>;
 export const researchRunSchema = z.object({
   id: z.string(),
   product_id: z.string(),
-  kind: z.enum(['interview', 'ab_test', 'delphi', 'playtest']),
+  kind: z.enum(['interview', 'ab_test', 'delphi', 'playtest', 'experiment']),
   title: z.string(),
   status: z.string(),
   config: z.record(z.string(), z.unknown()),

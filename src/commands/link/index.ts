@@ -98,9 +98,7 @@ export const registerLink = (program: Command): void => {
           process.stdout.write(
             `${ui.green(ui.check())} Linked ${ui.bold(productId)} → ${ui.dim(linkPath)}\n`,
           );
-          process.stdout.write(
-            `${ui.dim('Try:')} ${ui.cyan('oriyn research interview --question "<your question>"')}\n`,
-          );
+          process.stdout.write(`${ui.dim('Try:')} ${ui.cyan('oriyn research modes')}\n`);
         }
       } catch (err) {
         reportAndExit(err);
