@@ -1,6 +1,6 @@
 {
   "name": "oriyn",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Oriyn CLI — run persona-grounded product research before shipping.",
   "type": "module",
   "bin": {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.10
+
+### Patch Changes
+
+- 5181b68: Align CLI commands, docs, and API client surfaces with the clean v1 schema reset by removing old intake, run-management, and persona-count generation paths.
+- 65e230e: Add the experiment research command and remove research-run interview creation from the CLI.
+- 61a243f: Remove CLI usage of the unimplemented persona profile endpoint while continuing to show persona details from the surviving persona list API.
+- f576d44: Remove deprecated persona citation and source-user fields from analysis API schemas.
+
 ## 0.1.9
 
 ### Patch Changes
