@@ -8,7 +8,13 @@ import { createJsonlEmitter, writeJson } from '../../output/jsonl.ts';
 import { resolveMode } from '../../output/mode.ts';
 import { createSpinner } from '../../output/spinner.ts';
 
-type RunKind = 'interview' | 'ab_test' | 'delphi' | 'playtest';
+type RunKind = 'ab_test' | 'delphi' | 'playtest' | 'experiment';
+
+const parseExperimentAgentCount = (value: string): 100 | 500 | 1000 => {
+  const parsed = Number.parseInt(value, 10);
+  if (parsed === 100 || parsed === 500 || parsed === 1000) return parsed;
+  throw new Error('--agents must be one of 100, 500, or 1000');
+};
 
 const isTerminal = (status: string): boolean =>
   ['succeeded', 'failed', 'cancelled'].includes(status);
@@ -138,22 +144,6 @@ export const registerResearch = (program: Command): void => {
     });
 
   cmd
-    .command('interview')
-    .requiredOption('--question <text>', 'interview question')
-    .option('--persona <id>', 'persona id')
-    .option('--product <id>', 'override linked product id')
-    .action((opts: { question: string; persona?: string; product?: string }) =>
-      createAndFollowRun('interview', {
-        product: opts.product,
-        config: {
-          question: opts.question,
-          ...(opts.persona ? { persona_id: opts.persona } : {}),
-        },
-        ...(opts.persona ? { participantRule: { persona_ids: [opts.persona] } } : {}),
-      }),
-    );
-
-  cmd
     .command('ab-test')
     .requiredOption('--a <text>', 'variant A text')
     .requiredOption('--b <text>', 'variant B text')
@@ -170,6 +160,38 @@ export const registerResearch = (program: Command): void => {
           ],
         },
       }),
+    );
+
+  cmd
+    .command('experiment')
+    .requiredOption('--question <text>', 'positioning question')
+    .requiredOption('--a <text>', 'positioning option A')
+    .requiredOption('--b <text>', 'positioning option B')
+    .option('--c <text>', 'positioning option C')
+    .option('--agents <n>', 'agent count: 100, 500, or 1000', parseExperimentAgentCount, 100)
+    .option('--product <id>', 'override linked product id')
+    .action(
+      (opts: {
+        question: string;
+        a: string;
+        b: string;
+        c?: string;
+        agents: 100 | 500 | 1000;
+        product?: string;
+      }) =>
+        createAndFollowRun('experiment', {
+          product: opts.product,
+          config: {
+            question: opts.question,
+            agent_count: opts.agents,
+            model: 'gpt-5-nano',
+            positioning_options: [
+              { label: 'A', content: opts.a },
+              { label: 'B', content: opts.b },
+              ...(opts.c ? [{ label: 'C', content: opts.c }] : []),
+            ],
+          },
+        }),
     );
 
   cmd

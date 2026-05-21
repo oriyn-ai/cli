@@ -36,7 +36,7 @@ research result with participant summaries.
 
 ## Why oriyn
 
-- **Research before you build.** Run interviews, A/B research, Delphi rounds, or playtests against synthesized personas before you build the variant.
+- **Research before you build.** Run A/B research, Delphi rounds, experiments, or playtests against synthesized personas before you build the variant.
 - **Agent-native.** Non-TTY → JSONL. Designed for Claude Code, Codex, CI, and shell pipelines from day one.
 - **Cross-provider.** Personas are built from your product analytics, session replays, and payments — not from a single tool's view.
 - **Local-first auth.** OAuth 2.1 + PKCE direct to your browser. Tokens at `~/.config/oriyn/credentials.json` (`0600`). No keychain, no daemons.
@@ -90,9 +90,9 @@ oriyn personas <id>                  Persona detail (profile + facts)
 oriyn patterns                       Mined hypotheses + bottlenecks
 oriyn research modes                 List research modes
 oriyn research list                  List research runs
-oriyn research interview             Run a persona interview
 oriyn research ab-test               Compare two variants
 oriyn research delphi                Run a multi-round persona workshop
+oriyn research experiment            Simulate 100, 500, or 1000 agents
 oriyn research playtest              Run a task-based playtest
 
 oriyn sync                           Idempotent synthesize → enrich
@@ -112,7 +112,7 @@ var and commit `oriyn.json`:
 
 ```bash
 export ORIYN_ACCESS_TOKEN=<token>           # from app.oriyn.ai → Settings
-oriyn research interview --question "<question>"  # streams JSONL to stdout
+oriyn research experiment --question "<question>" --a "<positioning A>" --b "<positioning B>" --agents 100
 ```
 
 Install the Oriyn Agent Skill so Claude Code, Codex, Cursor, and other agents
@@ -127,7 +127,7 @@ The CLI infers JSONL mode from a non-TTY stdout. Each line is one event:
 ```jsonc
 {"type":"step","name":"resolve-product","ts":"…"}
 {"type":"progress","message":"status: running","ts":"…"}
-{"type":"result","data":{"kind":"interview","status":"succeeded","output_summary":{…}}}
+{"type":"result","data":{"kind":"experiment","status":"succeeded","output_summary":{…}}}
 ```
 
 Force the mode explicitly with `--human` or `--json` if you need to override
