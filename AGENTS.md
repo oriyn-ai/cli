@@ -13,7 +13,7 @@ Always run this loop end-to-end — don't stop after pushing.
 5. Commit changes (stage explicit files, never `git add -A`).
 6. Push the branch (`git push -u origin <branch>`).
 7. Open a non-draft PR with `gh pr create` and return the URL.
-8. **Wait** for Codex review and CI to finish. Don't proceed while either is pending.
+8. **Wait** for Codex review and CI to finish. Don't proceed while either is pending. For Codex, the 👀 reaction means review is in progress; only treat review as complete after Codex leaves a 👍 reaction on the PR, because comments can still arrive before that.
 9. **Resolve every outstanding comment** from Codex or reviewers — push fixup commits as needed — then mark each conversation thread as resolved.
 10. Re-run CI if any commits were pushed; confirm green.
 11. Once Codex is happy and CI is green, **merge the PR** (`gh pr merge --squash --delete-branch`) so the remote branch is deleted.
