@@ -2,13 +2,29 @@
 
 TypeScript CLI on Bun. Replaces the previous Go implementation.
 
-## Workflow
+## Dev Workflow
 
-- Before starting development work, ALWAYS switch to `main` and pull the latest from origin.
-- Create a new branch from updated `main` for every development task.
-- Make one commit per logical change.
-- At the end of the task, push the branch and create a non-draft PR.
+Always run this loop end-to-end — don't stop after pushing.
+
+1. `git switch main && git pull --ff-only` to start from the latest `main`.
+2. Create a feature branch (`git switch -c <topic>/<short-slug>`).
+3. Make scoped changes.
+4. Run relevant local checks (`bun run check`, `bun run build`, plus any task-specific tests).
+5. Commit changes (stage explicit files, never `git add -A`).
+6. Push the branch (`git push -u origin <branch>`).
+7. Open a non-draft PR with `gh pr create` and return the URL.
+8. **Wait** for Codex review and CI to finish. Don't proceed while either is pending.
+9. **Resolve every outstanding comment** from Codex or reviewers — push fixup commits as needed — then mark each conversation thread as resolved.
+10. Re-run CI if any commits were pushed; confirm green.
+11. Once Codex is happy and CI is green, **merge the PR** (`gh pr merge --squash --delete-branch`) and **delete the remote branch**.
+12. Locally: `git switch main && git pull --ff-only && git branch -d <branch>` to sync `main` and clean up the local branch.
+
+## Release Workflow
+
 - For CLI releases, Changesets owns versioning. Runtime/package PRs need a `.changeset/*.md` entry; merging the generated Version Packages PR automatically pushes the matching `vX.Y.Z` tag and triggers the npm/GitHub release workflows. Create tags manually only for release recovery.
+
+## Commands
+
 - `bun install` — install deps
 - `bun run src/index.ts <args>` — run during development (no transpile step)
 - `bun test` — run unit + integration tests
