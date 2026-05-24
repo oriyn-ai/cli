@@ -17,7 +17,7 @@ Always run this loop end-to-end — don't stop after pushing.
 9. **Resolve every outstanding comment** from Codex or reviewers — push fixup commits as needed — then mark each conversation thread as resolved.
 10. Re-run CI if any commits were pushed; confirm green.
 11. Once Codex is happy and CI is green, **merge the PR** (`gh pr merge --squash --delete-branch`) so the remote branch is deleted.
-12. Locally: `git switch main && git pull --ff-only origin main`; if the local branch still exists, delete it with `git branch -d <branch>`.
+12. Locally: `git switch main && git pull --ff-only origin main`; if the local branch still exists, delete it with `git branch -D <branch>`.
 
 ## Release Workflow
 
