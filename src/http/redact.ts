@@ -12,7 +12,6 @@ const SECRET_FIELDS = new Set([
   'api_key',
   'authorization',
   'bearer',
-  'code',
   'code_verifier',
   'credentials',
   'refresh_token',

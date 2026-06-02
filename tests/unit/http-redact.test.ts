@@ -35,4 +35,15 @@ describe('http/redact', () => {
     expect(result.access_token).toBe('[REDACTED]');
     expect(result.nested.secret_key).toBe('[REDACTED]');
   });
+
+  test('redactObject preserves structured error codes', () => {
+    const result = redactObject({
+      code: 'research_failed',
+      exit: 2,
+      meta: { code: 'api_500' },
+    });
+
+    expect(result.code).toBe('research_failed');
+    expect(result.meta.code).toBe('api_500');
+  });
 });
