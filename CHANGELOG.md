@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11
+
+### Patch Changes
+
+- 7fbddd0: Improve CLI Sentry error reporting, cleanup, and redaction around failed research runs.
+
 ## 0.1.10
 
 ### Patch Changes
