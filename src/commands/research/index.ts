@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import { createApp } from '../../app.ts';
-import { reportAndExit } from '../../lib/handle-error.ts';
+import { ExitCode } from '../../exit-codes.ts';
+import { CliError, reportAndExit } from '../../lib/handle-error.ts';
 import { poll } from '../../lib/poll.ts';
 import { requireProduct } from '../../lib/require-product.ts';
 import { renderTable, truncate, ui } from '../../output/human.ts';
@@ -61,9 +62,25 @@ async function createAndFollowRun(
     });
 
     if (run.status === 'failed') {
-      spinner.fail('Research run failed');
       if (resolveMode() === 'jsonl') emitter.error('Research run failed', 'research_failed', run);
-      process.exit(2);
+      throw new CliError('Research run failed', {
+        exit: ExitCode.Api,
+        code: 'research_failed',
+        reportable: true,
+        context: {
+          tags: {
+            'cli.command': 'research',
+            'research.kind': kind,
+            'research.status': run.status,
+          },
+          extra: {
+            product_id: productId,
+            research_run_id: created.research_run_id,
+            run_error: run.error,
+            url: created.url,
+          },
+        },
+      });
     }
     spinner.succeed(`Research ${run.status}`);
     if (resolveMode() === 'jsonl') {
@@ -76,7 +93,7 @@ async function createAndFollowRun(
     }
     process.stdout.write(`\n${ui.dim('View:')} ${created.url}\n`);
   } catch (err) {
-    spinner.fail();
+    spinner.fail(err instanceof CliError ? err.message : undefined);
     reportAndExit(err);
   } finally {
     await app.shutdown();

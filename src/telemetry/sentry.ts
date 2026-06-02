@@ -3,14 +3,18 @@ import { redactObject } from '../http/redact.ts';
 import { COMMIT, VERSION } from '../version.ts';
 import { ciAutoSkip } from './env.ts';
 
-const PUBLIC_DSN = process.env.ORIYN_SENTRY_DSN ?? '';
+type CaptureContext = Parameters<typeof Sentry.captureException>[1];
+type MessageContext = Parameters<typeof Sentry.captureMessage>[1];
+
+let initialized = false;
 
 export const initSentry = (env: NodeJS.ProcessEnv = process.env): boolean => {
-  if (!PUBLIC_DSN) return false;
+  const dsn = env.ORIYN_SENTRY_DSN ?? '';
+  if (!dsn) return false;
   if (VERSION === '0.0.0-dev') return false;
   if (ciAutoSkip(env)) return false;
   Sentry.init({
-    dsn: PUBLIC_DSN,
+    dsn,
     release: VERSION,
     environment: 'production',
     tracesSampleRate: 0,
@@ -20,12 +24,23 @@ export const initSentry = (env: NodeJS.ProcessEnv = process.env): boolean => {
     },
   });
   Sentry.setTag('commit', COMMIT);
+  initialized = true;
   return true;
 };
 
-export const captureException = (err: unknown): void => {
+export const captureException = (err: unknown, context?: CaptureContext): void => {
   try {
-    Sentry.captureException(err);
+    if (!initialized) return;
+    Sentry.captureException(err, context);
+  } catch {
+    /* never throw from telemetry */
+  }
+};
+
+export const captureMessage = (message: string, context?: MessageContext): void => {
+  try {
+    if (!initialized) return;
+    Sentry.captureMessage(message, context);
   } catch {
     /* never throw from telemetry */
   }
@@ -33,6 +48,7 @@ export const captureException = (err: unknown): void => {
 
 export const flushSentry = async (timeoutMs = 1000): Promise<void> => {
   try {
+    if (!initialized) return;
     await Sentry.flush(timeoutMs);
   } catch {
     /* swallow */

@@ -25,4 +25,14 @@ describe('http/redact', () => {
     expect(json).toContain('[REDACTED]');
     expect(json).not.toContain('abc.def.ghi');
   });
+
+  test('redactObject redacts sensitive field names', () => {
+    const result = redactObject({
+      access_token: 'plain-token-value',
+      nested: { secret_key: 'plain-secret-value' },
+    });
+
+    expect(result.access_token).toBe('[REDACTED]');
+    expect(result.nested.secret_key).toBe('[REDACTED]');
+  });
 });

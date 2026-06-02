@@ -7,6 +7,22 @@ const PATTERNS: ReadonlyArray<RegExp> = [
   /(refresh_token|access_token|code|state|code_verifier)=[A-Za-z0-9._~+/-]+/gi,
 ];
 
+const SECRET_FIELDS = new Set([
+  'apikey',
+  'api_key',
+  'authorization',
+  'bearer',
+  'code',
+  'code_verifier',
+  'credentials',
+  'refresh_token',
+  'access_token',
+  'secret',
+  'secret_key',
+  'secret_value',
+  'token',
+]);
+
 export const redact = (input: string): string => {
   let out = input;
   for (const pattern of PATTERNS) {
@@ -22,7 +38,7 @@ export const redactObject = <T>(value: T): T => {
   if (typeof value === 'object') {
     const result: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
-      result[key] = redactObject(v);
+      result[key] = SECRET_FIELDS.has(key.toLowerCase()) ? '[REDACTED]' : redactObject(v);
     }
     return result as T;
   }
