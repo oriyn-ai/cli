@@ -12,7 +12,7 @@ import registerResearch from './commands/research/index.ts';
 import registerStatus from './commands/status.ts';
 import registerSync from './commands/sync.ts';
 import registerUpgrade from './commands/upgrade.ts';
-import { reportAndExit } from './lib/handle-error.ts';
+import { isExitSignal, reportAndExit } from './lib/handle-error.ts';
 import { flushSentry, initSentry } from './telemetry/sentry.ts';
 import { VERSION } from './version.ts';
 
@@ -46,7 +46,13 @@ const main = async () => {
   try {
     await program.parseAsync(process.argv);
   } catch (err) {
-    reportAndExit(err);
+    if (!isExitSignal(err)) {
+      try {
+        reportAndExit(err);
+      } catch (exitErr) {
+        if (!isExitSignal(exitErr)) throw exitErr;
+      }
+    }
   } finally {
     await flushSentry();
   }

@@ -71,7 +71,8 @@ export const registerLink = (program: Command): void => {
           });
           if (p.isCancel(choice)) {
             p.cancel('Cancelled');
-            process.exit(1);
+            process.exitCode = 1;
+            return;
           }
           productId = choice as string;
 
@@ -84,7 +85,8 @@ export const registerLink = (program: Command): void => {
             });
             if (p.isCancel(confirm) || !confirm) {
               p.cancel('Cancelled');
-              process.exit(1);
+              process.exitCode = 1;
+              return;
             }
           }
           p.outro('Linking…');
