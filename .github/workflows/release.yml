@@ -19,7 +19,7 @@ jobs:
         with:
           bun-version: latest
       - run: bun run verify-release-tag
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           # 'lts/*' = current Node LTS, which ships current npm. Trusted
           # Publishers needs npm 11.5+; LTS 24+ has it. Use '*' instead if
